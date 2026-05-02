@@ -4,3 +4,6 @@ How the web interface works:
 To access it, enter the PCB's IP address in your browser. 
 The yaw rate (BNO) is the maximum course change allowed for zeroing. 
 The same applies to the GPS heading. If you find that zeroing is too easily achieved, lower these values.
+
+PCB de base
+<img width="3060" height="4080" alt="20260428_105213" src="https://github.com/user-attachments/assets/034539bc-0827-4e93-bcbd-d16263b01353" />

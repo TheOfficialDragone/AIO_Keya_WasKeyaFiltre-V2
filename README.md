@@ -7,3 +7,5 @@ The same applies to the GPS heading. If you find that zeroing is too easily achi
 
 PCB de base
 <img width="3060" height="4080" alt="20260428_105213" src="https://github.com/user-attachments/assets/034539bc-0827-4e93-bcbd-d16263b01353" />
+<img width="3456" height="4608" alt="20260223_144233" src="https://github.com/user-attachments/assets/6e946b45-2e5e-4752-becd-a2a39db2c7ec" />
+

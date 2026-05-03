@@ -12,15 +12,21 @@ enum TM171ParseState {
   WAIT_HEADER_1,
   WAIT_HEADER_2,
   WAIT_LENGTH,
-  WAIT_PAYLOAD
+  WAIT_PAYLOAD,
+  WAIT_DISCARD_OVERSIZE
 };
 
 TM171ParseState parseState = WAIT_HEADER_1;
 uint8_t packetLength = 0;
 uint8_t payloadIndex = 0;
 bool gotPacket = false;
+uint16_t oversizeBytesRemaining = 0;
+uint8_t oversizePrefix[8];
+uint8_t oversizePrefixCount = 0;
+uint32_t oversizePacketCount = 0;
+bool oversizeLogSuppressed = false;
 
-uint8_t ImuData[64];
+uint8_t ImuData[96];
 uint8_t ImuDC = 0 ;
 
 union Onion
@@ -39,6 +45,39 @@ uint8_t qos;
 bool TM171DataSeen = false;
 
 //#define TM171DEBUG
+
+static void logOversizeTM171Packet()
+{
+  oversizePacketCount++;
+
+  if (oversizePacketCount <= 10)
+  {
+    Serial.print("TM171 oversize packet #");
+    Serial.print(oversizePacketCount);
+    Serial.print(" len=");
+    Serial.print(packetLength);
+    Serial.print(" prefix=");
+
+    for (uint8_t i = 0; i < oversizePrefixCount; i++)
+    {
+      if (i)
+      {
+        Serial.print(' ');
+      }
+      if (oversizePrefix[i] < 0x10)
+      {
+        Serial.print('0');
+      }
+      Serial.print(oversizePrefix[i], HEX);
+    }
+    Serial.println();
+  }
+  else if (!oversizeLogSuppressed)
+  {
+    oversizeLogSuppressed = true;
+    Serial.println("TM171 oversize packet logging suppressed after 10 entries");
+  }
+}
 
 void TM171setup() {
   SerialImu->begin(115200); 
@@ -82,7 +121,9 @@ void TM171process() {
         if ((uint32_t)packetLength + 5 > sizeof(ImuData))
         {
           parseState = WAIT_HEADER_1;
-          Serial.println("Too big data from TM171!");
+          oversizeBytesRemaining = (uint16_t)packetLength + 2;
+          oversizePrefixCount = 0;
+          parseState = WAIT_DISCARD_OVERSIZE;
         }
         break;
       
@@ -95,7 +136,25 @@ void TM171process() {
           parseState = WAIT_HEADER_1;
         }
         break;
+
+      case WAIT_DISCARD_OVERSIZE:
+        if (oversizePrefixCount < sizeof(oversizePrefix))
+        {
+          oversizePrefix[oversizePrefixCount++] = temp;
+        }
+
+        if (oversizeBytesRemaining > 0)
+        {
+          oversizeBytesRemaining--;
+        }
+
+        if (oversizeBytesRemaining == 0)
+        {
+          logOversizeTM171Packet();
+          parseState = WAIT_HEADER_1;
     }
+        break;
+        }
     if (gotPacket)
     {
       gotPacket = false;

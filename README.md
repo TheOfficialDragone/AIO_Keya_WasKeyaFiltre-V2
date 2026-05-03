@@ -1,3 +1,5 @@
+Code to use the Keya encoder instead of the angle sensor. To synchronize the encoder and the actual wheel angle, the WAS (Wheel Angle Sensor) automatically resets to 0 based on the GPS and IMU headings. To activate Keya WAS mode, you must first activate Danfoss mode. To return to normal mode, deactivate it. Then, an initial zeroing is performed at startup; until this is complete, guidance is not possible. Afterward, it continuously zeroes based on the GPS and IMU headings. Tolerances are adjustable via a web interface.
+
 Here is the link to the basic PCB: https://github.com/buched/Ecu_box_v2.01_autosteer4.1_ecu
 
 How the web interface works: 

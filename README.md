@@ -17,3 +17,5 @@ Carte d'expansion IO de PLC de Modbus RTU NPN/PNP entrée numérique LilContrmat
 https://a.aliexpress.com/_ExNAeaw
 
 From 4 to 16 relays and NPN or PNP input 
+
+<img width="1079" height="463" alt="1000005454" src="https://github.com/user-attachments/assets/2ad86f5f-3ffe-409f-af55-76c547381ec2" />

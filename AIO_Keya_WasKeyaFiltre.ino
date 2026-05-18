@@ -192,6 +192,8 @@ float roll = 0;
 float pitch = 0;
 float yaw = 0;
 
+#include "EthernetUpdater.h"
+EthernetUpdater updater;
 // Setup procedure ------------------------
 void setup()
 {
@@ -209,20 +211,21 @@ void setup()
   Serial.print("Version : ");
   Serial.println(VERSION);
   Serial.println("Start setup");
-
+  
   SerialGPS->begin(baudGPS);
   SerialGPS->addMemoryForRead(GPSrxbuffer, serial_buffer_size);
   SerialGPS->addMemoryForWrite(GPStxbuffer, serial_buffer_size);
-
+  
   delay(10);  
   Serial.println("SerialAOG, SerialRTK, SerialGPS initialized");
-
+  
   Serial.println("\r\nStarting AutoSteer...");
   autosteerSetup();
   
   Serial.println("\r\nStarting Ethernet...");
   EthernetStart();
-
+  updater.begin();
+  
   Serial.println("\r\nStarting IMU...");
   //test if CMPS working
   uint8_t error;
@@ -314,6 +317,7 @@ void loop()
 {
     KeyaBus_Receive();
     webConfigLoop();
+    updater.poll();
 
     // Read incoming nmea from GPS modif FlorianT
     if (SerialGPS->available())

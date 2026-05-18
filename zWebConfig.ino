@@ -1,8 +1,8 @@
 // =============================================================
-// SERVEUR WEB DE CONFIGURATION - Port 80
-// Accessible depuis un navigateur : http://<IP_du_Teensy>
-// Appeler webConfigSetup() dans EthernetStart() apres Ethernet.begin()
-// Appeler webConfigLoop()  dans loop() principal (PAS dans autosteerLoop)
+// WEB CONFIGURATION SERVER - Port 80
+// Accessible from a browser: http://<Teensy_IP>
+// Call webConfigSetup() in EthernetStart() after Ethernet.begin()
+// Call webConfigLoop() in the main loop() (NOT in autosteerLoop)
 // =============================================================
 
 #ifdef ARDUINO_TEENSY41
@@ -13,7 +13,7 @@
 
 EthernetServer webServer(80);
 
-// Variables externes necessaires
+// Required external variables
 extern byte           Eth_myip[4];
 extern float          steerAngleActual;
 extern float          gpsSpeed;
@@ -25,7 +25,7 @@ extern int32_t        keyaZeroTicks;
 extern float          azCorrAccum;
 extern int32_t        keyaEncoderRaw;
 
-// Filtres EMA BNO (definis dans zHandlers.ino)
+// BNO EMA filters (defined in zHandlers.ino)
 extern float          emaYawAlpha;
 extern float          emaRollAlpha;
 extern float          emaPitchAlpha;
@@ -37,7 +37,7 @@ extern float          emaStopKmh;
 #define EEPROM_ADDR_EMA_STOP  162
 
 
-// Forward declaration (definie dans zHandlers.ino)
+// Forward declaration (defined in zHandlers.ino)
 void emaParamsLoad() {
     float v;
     
@@ -55,12 +55,12 @@ void emaParamsLoad() {
 }
 
 // -----------------------------------------------------------------
-// Setup - appeler apres Ethernet.begin()
+// Setup - call after Ethernet.begin()
 // -----------------------------------------------------------------
 void webConfigSetup()
 {
   webServer.begin();
-  Serial.print("[WEB] Serveur config demarre : http://");
+  Serial.print("[WEB] Config server started: http://");
   Serial.print(Eth_myip[0]); Serial.print(".");
   Serial.print(Eth_myip[1]); Serial.print(".");
   Serial.print(Eth_myip[2]); Serial.print(".");
@@ -104,11 +104,11 @@ static uint32_t extractUint(const String& body, const char* key, uint32_t defVal
 }
 
 // -----------------------------------------------------------------
-// Traitement d'une requete POST /save
+// Handle a POST /save request
 // -----------------------------------------------------------------
 static void handlePost(const String& body)
 {
-  // Checkboxes HTML : presentes dans le POST seulement si cochees
+  // HTML checkboxes: present in POST only when checked
   azParams.useBno = body.indexOf("useBno=1") >= 0 ? 1 : 0;
   azParams.useGps = body.indexOf("useGps=1") >= 0 ? 1 : 0;
 
@@ -130,38 +130,38 @@ static void handlePost(const String& body)
     EEPROM.put(EEPROM_ADDR_KEYA_TICKS, keyaTicksPerDeg);
   }
 
-  // Filtres EMA BNO (pas de sauvegarde EEPROM, RAM uniquement)
+  // BNO EMA filters
 {
   float v;
   v = extractFloat(body, "emaYaw", emaYawAlpha);
   if (v >= 0.0f && v <= 1.0f) {
       emaYawAlpha = v;
-      EEPROM.put(EEPROM_ADDR_EMA_YAW, emaYawAlpha); // Sauvegarde
+      EEPROM.put(EEPROM_ADDR_EMA_YAW, emaYawAlpha); // Save
   }
   v = extractFloat(body, "emaRoll", emaRollAlpha);
   if (v >= 0.0f && v <= 1.0f) {
       emaRollAlpha = v;
-      EEPROM.put(EEPROM_ADDR_EMA_ROLL, emaRollAlpha); // Sauvegarde
+      EEPROM.put(EEPROM_ADDR_EMA_ROLL, emaRollAlpha); // Save
   }
   v = extractFloat(body, "emaPitch", emaPitchAlpha);
   if (v >= 0.0f && v <= 1.0f) {
       emaPitchAlpha = v;
-      EEPROM.put(EEPROM_ADDR_EMA_PITCH, emaPitchAlpha); // Sauvegarde
+      EEPROM.put(EEPROM_ADDR_EMA_PITCH, emaPitchAlpha); // Save
   }
   v = extractFloat(body, "emaStop", emaStopKmh);
   if (v >= 0.0f && v <= 20.0f) {
       emaStopKmh = v;
-      EEPROM.put(EEPROM_ADDR_EMA_STOP, emaStopKmh); // Sauvegarde
+      EEPROM.put(EEPROM_ADDR_EMA_STOP, emaStopKmh); // Save
   }
 }
 
-  Serial.print("[WEB] Sauv. useBno="); Serial.print(azParams.useBno);
+  Serial.print("[WEB] Saved useBno="); Serial.print(azParams.useBno);
   Serial.print(" useGps=");            Serial.print(azParams.useGps);
   Serial.print(" beta=");              Serial.println(azParams.beta, 3);
 }
 
 // -----------------------------------------------------------------
-// Helper : ligne parametre numerique
+// Helper: numeric parameter row
 // -----------------------------------------------------------------
 static void rowNum(EthernetClient& c,
                    const char* label, const char* name,
@@ -179,7 +179,7 @@ static void rowNum(EthernetClient& c,
 }
 
 // -----------------------------------------------------------------
-// Helper : toggle ON/OFF (checkbox + switch CSS)
+// Helper: ON/OFF toggle (checkbox + CSS switch)
 // -----------------------------------------------------------------
 static void rowToggle(EthernetClient& c,
                       const char* label, const char* name,
@@ -196,7 +196,7 @@ static void rowToggle(EthernetClient& c,
 }
 
 // -----------------------------------------------------------------
-// Page HTML principale
+// Main HTML page
 // -----------------------------------------------------------------
 static void sendPage(EthernetClient& c)
 {
@@ -251,195 +251,195 @@ static void sendPage(EthernetClient& c)
   c.println(".off{background:#333;color:#777}.on{background:#2a2a6a;color:#a0a0f0}");
   c.println("</style></head><body>");
 
-  // ---- TITRE ----
+  // ---- TITLE ----
   c.println("<h1>&#9881; Config AOG Keya</h1>");
 
-  // ---- STATUT TEMPS REEL ----
+  // ---- REAL-TIME STATUS ----
   c.print("<div class='status'>");
   c.print("&#127973; Angle WAS : <b>"); c.print(steerAngleActual, 2); c.print(" deg</b> &nbsp; ");
-  c.print("&#128663; Vitesse : <b>"); c.print(gpsSpeed, 1); c.print(" km/h</b><br>");
-  c.print("&#127748; Cap GPS filtre : <b>"); c.print(emaGpsHdg / 10.0f, 1); c.print(" deg</b> &nbsp; ");
-  c.print("Zero etabli : ");
-  if (wasZeroDone) c.print("<span class='ok'>&#10003; OUI</span>");
-  else             c.print("<span class='nok'>&#10007; NON</span>");
+  c.print("&#128663; Speed: <b>"); c.print(gpsSpeed, 1); c.print(" km/h</b><br>");
+  c.print("&#127748; Filtered GPS heading: <b>"); c.print(emaGpsHdg / 10.0f, 1); c.print(" deg</b> &nbsp; ");
+  c.print("Zero established: ");
+  if (wasZeroDone) c.print("<span class='ok'>&#10003; YES</span>");
+  else             c.print("<span class='nok'>&#10007; NO</span>");
   c.println("</div>");
 
-  // ---- BLOC SUIVI AUTO-ZERO ----
+  // ---- AUTO-ZERO TRACKING BLOCK ----
   {
     float zeroDeg = (keyaTicksPerDeg > 0.0f) ? ((float)keyaZeroTicks / keyaTicksPerDeg) : 0.0f;
 
     c.print("<div class='azblock'>");
-    c.println("<div class='aztitle'>&#127919; Suivi Auto-Zero Keya</div>");
+    c.println("<div class='aztitle'>&#127919; Keya Auto-Zero Tracking</div>");
     c.println("<div class='azgrid'>");
 
-    // Carte 1 : Angle WAS actuel (grande, verte)
+    // Card 1: Current WAS angle (large, green)
     c.print("<div class='azcard'>");
-    c.print("<span class='azlbl'>Angle WAS actuel</span>");
+    c.print("<span class='azlbl'>Current WAS angle</span>");
     c.print("<span class='azval big'>"); c.print(steerAngleActual, 2); c.print(" deg</span>");
     c.println("</div>");
 
-    // Carte 2 : Zero offset en degres
+    // Card 2: Zero offset in degrees
     c.print("<div class='azcard'>");
     c.print("<span class='azlbl'>WAS offset (zero)</span>");
     c.print("<span class='azval'>"); c.print(zeroDeg, 2); c.print(" deg</span>");
     c.println("</div>");
 
-    // Carte 3 : Zero ticks bruts
+    // Card 3: Raw zero ticks
     c.print("<div class='azcard'>");
-    c.print("<span class='azlbl'>Zero encodeur (ticks)</span>");
+    c.print("<span class='azlbl'>Encoder zero (ticks)</span>");
     c.print("<span class='azval'>"); c.print(keyaZeroTicks); c.println("</span></div>");
 
-    // Carte 4 : Correction accumulee
+    // Card 4: Accumulated correction
     c.print("<div class='azcard'>");
-    c.print("<span class='azlbl'>Correction accumulee</span>");
+    c.print("<span class='azlbl'>Accumulated correction</span>");
     c.print("<span class='azval");
     if (fabsf(azCorrAccum) > 0.3f) c.print(" azwarn");
     c.print("'>"); c.print(azCorrAccum, 3); c.println(" tk</span></div>");
 
-    c.println("</div>"); // fin azgrid
+    c.println("</div>"); // end azgrid
 
-    // Barre de progression correction (plage -1 .. +1 tick)
+    // Correction progress bar (range -1 .. +1 tick)
     {
       float pct = constrain((azCorrAccum + 1.0f) / 2.0f, 0.0f, 1.0f) * 100.0f;
       c.print("<div class='azbar'><div class='azfill' style='width:");
       c.print(pct, 0); c.println("%'></div></div>");
     }
 
-    c.println("</div>"); // fin azblock
+    c.println("</div>"); // end azblock
   }
 
   c.println("<form method='POST' action='/save'>");
 
   // ================================================================
-  // SECTION 1 : SOURCES DE CAP
+  // SECTION 1: HEADING SOURCES
   // ================================================================
-  c.println("<h2>&#128268; Sources de cap pour l'auto-zero</h2>");
+  c.println("<h2>&#128268; Heading sources for auto-zero</h2>");
 
   c.print("<div class='desc' style='color:#888;margin-bottom:9px'>");
-  c.print("Le zero WAS est corrige automatiquement quand le firmware detecte que le tracteur va <b>tout droit</b>. ");
-  c.print("Les deux sources activees doivent etre <b>stables simultanement</b> pour valider la correction.");
+  c.print("The WAS zero is corrected automatically when the firmware detects the tractor is driving <b>straight</b>. ");
+  c.print("Both enabled sources must be <b>stable at the same time</b> to validate the correction.");
   c.println("</div>");
 
   rowToggle(c,
-    "Source BNO08x — yaw rate gyroscopique",
+    "BNO08x source - gyroscopic yaw rate",
     "useBno", azParams.useBno,
-    "Le gyro mesure la vitesse de rotation en cap [deg/s]. "
-    "A desirer nul quand le tracteur est droit. "
-    "<b>Seuil : Yaw rate maxi (ci-dessous).</b> "
-    "Desactiver uniquement si BNO absent ou defaillant.");
+    "The gyro measures heading rotation speed [deg/s]. "
+    "Ideally close to zero when the tractor is straight. "
+    "<b>Threshold: Max yaw rate (below).</b> "
+    "Disable only if BNO is missing or faulty.");
 
   rowToggle(c,
-    "Source GPS VTG — variation de cap",
+    "GPS VTG source - heading variation",
     "useGps", azParams.useGps,
-    "Compare le cap GPS entre deux cycles. Si le cap ne varie pas, le tracteur est droit. "
-    "<b>Seuil : Variation GPS maxi (ci-dessous).</b> "
-    "Efficace en ligne droite rapide. Bruyant a basse vitesse ou avec GPS monoantenne de mauvaise qualite. "
-    "Si les deux sources sont desactivees : le zero se fait uniquement sur vitesse + duree.");
+    "Compares GPS heading between two cycles. If heading does not change, the tractor is straight. "
+    "<b>Threshold: Max GPS variation (below).</b> "
+    "Effective on fast straight lines. Noisy at low speed or with poor single-antenna GPS quality. "
+    "If both sources are disabled: zeroing uses only speed + duration.");
 
   c.println("<hr class='sep'>");
 
   rowNum(c,
-    "Beta — vitesse de correction (guidage AOG actif)",
+    "Beta - correction speed (AOG active steering)",
     "beta", azParams.beta, 3, "",
-    "En mode <b>guidage actif</b> uniquement (mode precis). "
-    "Fraction de l'erreur angulaire appliquee comme correction a chaque cycle stable. "
-    "<b>0.01</b> = tres lent (plusieurs secondes de ligne droite pour corriger 1 deg). "
-    "<b>0.05</b> = equilibre recommande. "
-    "<b>0.15</b> = reactif (peut osciller si route n'est pas parfaitement droite). "
-    "Sans guidage actif : le zero est recale directement (saut direct).");
+    "In <b>active steering</b> mode only (precise mode). "
+    "Fraction of angular error applied as correction at each stable cycle. "
+    "<b>0.01</b> = very slow (several seconds of straight driving to correct 1 deg). "
+    "<b>0.05</b> = recommended balance. "
+    "<b>0.15</b> = responsive (can oscillate if the road is not perfectly straight). "
+    "Without active steering: zero is recentered directly (instant step).");
 
   // ================================================================
-  // SECTION 2 : CONDITIONS DE STABILITE
+  // SECTION 2: STABILITY CONDITIONS
   // ================================================================
-  c.println("<h2>&#9202; Conditions de stabilite</h2>");
+  c.println("<h2>&#9202; Stability conditions</h2>");
 
   c.print("<div class='desc' style='color:#888;margin-bottom:9px'>");
-  c.print("Toutes ces conditions doivent etre vraies en meme temps pour demarrer le comptage. ");
-  c.print("Si une condition est perdue, le compteur repart de zero.");
+  c.print("All these conditions must be true at the same time to start timing. ");
+  c.print("If any condition is lost, the timer resets to zero.");
   c.println("</div>");
 
   rowNum(c,
-    "Vitesse minimum",
+    "Minimum speed",
     "speedMin", azParams.speedMin, 1, "km/h",
-    "En dessous : l'auto-zero est <b>completement bloque</b>. "
-    "Evite les corrections a l'arret, en manoeuvre ou en demi-tour. "
-    "Recommande : <b>1.0 km/h</b> (laisser passer le demarrage lent).");
+    "Below this: auto-zero is <b>fully blocked</b>. "
+    "Prevents corrections while stopped, maneuvering, or making U-turns. "
+    "Recommended: <b>1.0 km/h</b> (lets slow starts pass).");
 
   rowNum(c,
-    "Yaw rate BNO maxi",
+    "Max BNO yaw rate",
     "yawRateMax", azParams.yawRateMax, 2, "deg/s",
-    "Seuil au-dela duquel le BNO considere que l'on tourne. "
-    "<b>Baisser</b> = plus strict, zero uniquement en ligne tres rectiligne. "
-    "<b>Hausser</b> = plus permissif, risque de corriger en virage doux. "
-    "Inactif si Source BNO desactivee. "
-    "Recommande : <b>0.5 - 1.0</b> deg/s.");
+    "Threshold above which BNO considers the vehicle to be turning. "
+    "<b>Lower</b> = stricter, zero only on very straight lines. "
+    "<b>Raise</b> = more permissive, risk of correcting in gentle turns. "
+    "Inactive if BNO source is disabled. "
+    "Recommended: <b>0.5 - 1.0</b> deg/s.");
 
   rowNum(c,
-    "Variation cap GPS maxi",
+    "Max GPS heading variation",
     "gpsHdgMax", azParams.gpsHdgMax, 2, "deg",
-    "Ecart de cap GPS tolere entre deux cycles (25ms). "
-    "<b>Baisser</b> = plus strict. <b>Hausser</b> = plus permissif. "
-    "Inactif si Source GPS desactivee. "
-    "Recommande : <b>0.5 - 1.0</b> deg.");
+    "Allowed GPS heading difference between two cycles (25ms). "
+    "<b>Lower</b> = stricter. <b>Raise</b> = more permissive. "
+    "Inactive if GPS source is disabled. "
+    "Recommended: <b>0.5 - 1.0</b> deg.");
 
   // ================================================================
-  // SECTION 3 : DUREES DE STABILITE
+  // SECTION 3: STABILITY DURATIONS
   // ================================================================
-  c.println("<h2>&#9200; Durees de stabilite requises</h2>");
+  c.println("<h2>&#9200; Required stability durations</h2>");
 
   c.print("<div class='desc' style='color:#888;margin-bottom:9px'>");
-  c.print("La duree est <b>interpolee</b> entre les deux seuils de vitesse. "
-          "Ex : a 6 km/h (entre 3 et 12), la duree sera a mi-chemin entre lente et rapide.");
+    c.print("Duration is <b>interpolated</b> between the two speed thresholds. "
+      "Example: at 6 km/h (between 3 and 12), duration is halfway between slow and fast.");
   c.println("</div>");
 
   rowNum(c,
-    "Duree requise a basse vitesse",
+    "Required duration at low speed",
     "timeSlowMs", (float)azParams.timeSlowMs, 0, "ms",
-    "Temps de stabilite exige quand vitesse &lt;= seuil bas. "
-    "Plus long = plus sur, mais corrections plus rares. "
-    "Recommande : <b>400 - 800 ms</b>.");
+    "Required stable time when speed &lt;= low threshold. "
+    "Longer = safer, but fewer corrections. "
+    "Recommended: <b>400 - 800 ms</b>.");
 
   rowNum(c,
-    "Duree requise a haute vitesse",
+    "Required duration at high speed",
     "timeFastMs", (float)azParams.timeFastMs, 0, "ms",
-    "Temps de stabilite exige quand vitesse >= seuil haut. "
-    "A haute vitesse on est naturellement plus droit, duree plus courte possible. "
-    "Recommande : <b>150 - 300 ms</b>.");
+    "Required stable time when speed >= high threshold. "
+    "At higher speed the vehicle is naturally straighter, so shorter duration is possible. "
+    "Recommended: <b>150 - 300 ms</b>.");
 
   rowNum(c,
-    "Seuil basse vitesse",
+    "Low speed threshold",
     "speedSlow", azParams.speedSlow, 1, "km/h",
-    "En dessous : duree longue appliquee. Recommande : <b>3 km/h</b>.");
+    "Below this: long duration is applied. Recommended: <b>3 km/h</b>.");
 
   rowNum(c,
-    "Seuil haute vitesse",
+    "High speed threshold",
     "speedFast", azParams.speedFast, 1, "km/h",
-    "Au dessus : duree courte appliquee. Recommande : <b>10 - 15 km/h</b>.");
+    "Above this: short duration is applied. Recommended: <b>10 - 15 km/h</b>.");
 
   // ================================================================
-  // SECTION 4 : CALIBRATION KEYA
+  // SECTION 4: KEYA CALIBRATION
   // ================================================================
-  c.println("<h2>&#128295; Calibration encodeur Keya</h2>");
+  c.println("<h2>&#128295; Keya encoder calibration</h2>");
 
   rowNum(c,
-    "Ticks par degre de braquage roue",
+    "Ticks per wheel steering degree",
     "keyaTicks", keyaTicksPerDeg, 1, "t/deg",
-    "Ratio mecanique : ticks encodeur par degre de braquage roue. "
-    "<b>Defaut 24.0</b> = 4 tours moteur pour 60 deg butee-a-butee. "
-    "Si l'angle AOG est trop grand : augmenter. Trop petit : diminuer. "
-    "Formule : (tours_moteur x 65535) / angle_total_deg.");
+    "Mechanical ratio: encoder ticks per wheel steering degree. "
+    "<b>Default 24.0</b> = 4 motor turns for 60 deg lock-to-lock. "
+    "If AOG angle is too large: increase. Too small: decrease. "
+    "Formula: (motor_turns x 65535) / total_angle_deg.");
 
   // ================================================================
-  // SECTION 5 : FILTRES EMA BNO
+  // SECTION 5: BNO EMA FILTERS
   // ================================================================
-  c.println("<h2>&#127919; Filtres EMA anti-secousse BNO08x</h2>");
+  c.println("<h2>&#127919; BNO08x anti-jitter EMA filters</h2>");
 
   c.print("<div class='desc' style='color:#888;margin-bottom:9px'>");
-  c.print("Lissage exponentiel applique sur yaw, roll et pitch avant envoi dans la trame PANDA. "
-          "<b>0.0</b> = desactive (valeur brute). "
-          "<b>0.05</b> = tres lisse. "
-          "<b>0.10</b> = equilibre. "
-          "<b>0.30</b> = quasi-brut.");
+    c.print("Exponential smoothing applied to yaw, roll, and pitch before sending in the PANDA frame. "
+      "<b>0.0</b> = disabled (raw value). "
+      "<b>0.05</b> = very smooth. "
+      "<b>0.10</b> = balanced. "
+      "<b>0.30</b> = near-raw.");
   c.println("</div>");
 
   // Yaw
@@ -455,7 +455,7 @@ static void sendPage(EthernetClient& c)
 
   // Roll
   c.print("<div class='emarow'>");
-  c.print("<label>Roll (gite)</label>");
+  c.print("<label>Roll (tilt)</label>");
   c.print("<input type='range' name='emaRoll' min='0' max='0.5' step='0.01' value='");
   c.print(emaRollAlpha, 2);
   c.print("' oninput=\"document.getElementById('vr').textContent=parseFloat(this.value).toFixed(2);\">");
@@ -466,7 +466,7 @@ static void sendPage(EthernetClient& c)
 
   // Pitch
   c.print("<div class='emarow'>");
-  c.print("<label>Pitch (inclinaison AV/AR)</label>");
+  c.print("<label>Pitch (front/rear tilt)</label>");
   c.print("<input type='range' name='emaPitch' min='0' max='0.5' step='0.01' value='");
   c.print(emaPitchAlpha, 2);
   c.print("' oninput=\"document.getElementById('vp').textContent=parseFloat(this.value).toFixed(2);\">");
@@ -477,9 +477,9 @@ static void sendPage(EthernetClient& c)
 
   c.println("<hr class='sep'>");
 
-  // Seuil vitesse stop
+  // Stop speed threshold
   c.print("<div class='emarow'>");
-  c.print("<label>Seuil reset a l'arret</label>");
+  c.print("<label>Reset threshold when stopped</label>");
   c.print("<input type='range' name='emaStop' min='0' max='10' step='0.5' value='");
   c.print(emaStopKmh, 1);
   c.print("' oninput=\"document.getElementById('vs').textContent=parseFloat(this.value).toFixed(1);\">");
@@ -487,15 +487,15 @@ static void sendPage(EthernetClient& c)
   c.print("<span style='font-size:.73em;color:#556;margin-left:4px'>km/h</span>");
   c.println("</div>");
   c.print("<div class='desc'>");
-  c.print("En dessous de ce seuil, l'EMA est reinitialise (valeur brute). "
-          "<b>0.0</b> = filtrage permanent meme a l'arret.");
+    c.print("Below this threshold, EMA is reset (raw value). "
+      "<b>0.0</b> = permanent filtering, even when stopped.");
   c.println("</div>");
 
   // ================================================================
-  // BOUTON
+  // BUTTON
   // ================================================================
-  c.println("<button type='submit'>&#128190; Sauvegarder en EEPROM</button>");
-  c.println("<p class='foot' id='stlbl'>Statut rafraichi toutes les 5s</p>");
+  c.println("<button type='submit'>&#128190; Save to EEPROM</button>");
+  c.println("<p class='foot' id='stlbl'>Status refreshed every 5s</p>");
   c.println("</form>");
 
   // ================================================================
@@ -507,7 +507,7 @@ static void sendPage(EthernetClient& c)
   c.println("document.querySelectorAll('input').forEach(el=>{");
   c.println("  el.addEventListener('change',()=>{");
   c.println("    dirty=true;clearTimeout(rt);");
-  c.println("    document.getElementById('stlbl').textContent='[modification en cours - refresh suspendu]';");
+  c.println("    document.getElementById('stlbl').textContent='[changes in progress - refresh paused]';");
   c.println("    document.getElementById('stlbl').style.color='#e94560';");
   c.println("  });");
   c.println("});");
@@ -518,8 +518,8 @@ static void sendPage(EthernetClient& c)
 }
 
 // -----------------------------------------------------------------
-// Loop - appeler dans loop() principal, hors autosteerLoop()
-// Non bloquant
+// Loop - call in main loop(), outside autosteerLoop()
+// Non-blocking
 // -----------------------------------------------------------------
 void webConfigLoop()
 {

@@ -14,9 +14,9 @@
 
 // Instance globale - valeurs par defaut
 AutoZeroParams azParams = {
-  .speedMin    = 2.0f,
-  .yawRateMax  = 0.5f,
-  .gpsHdgMax   = 0.5f,
+  .speedMin    = 2.5f,
+  .yawRateMax  = 0.3f,
+  .gpsHdgMax   = 0.3f,
   .timeSlowMs  = 500,
   .timeFastMs  = 200,
   .speedSlow   = 3.0f,

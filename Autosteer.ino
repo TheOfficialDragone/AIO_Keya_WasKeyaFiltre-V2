@@ -854,10 +854,13 @@ void ReceiveUdp()
 
 				steerSettings.steerSensorCounts = autoSteerUdpData[9]; //sent as setting displayed in AOG
 
-        // En mode encodeur Keya : steerSensorCounts sert de multiplicateur de calibration
+        // En mode encodeur Keya : steerSensorCounts règle keyaTicksPerDeg
+        // Proportionnel pur centré sur 100 = KEYA_TICKS_PER_DEG_DEFAULT (24 ticks/deg)
+        // Exemples : 50 -> 12 ticks/deg, 100 -> 24 ticks/deg, 200 -> 48 ticks/deg
+        // Le zéro (offset) est géré séparément par keyaZeroTicks via l'auto-zero
         if (steerConfig.IsDanfoss) {
-          keyaTicksPerDeg = KEYA_TICKS_PER_DEG_DEFAULT *
-                            (0.5f + (float)steerSettings.steerSensorCounts / 255.0f);
+          keyaTicksPerDeg = KEYA_TICKS_PER_DEG_DEFAULT * ((float)steerSettings.steerSensorCounts / 100.0f);
+          if (keyaTicksPerDeg < 1.0f) keyaTicksPerDeg = 1.0f; // garde-fou division par zero
           EEPROM.put(EEPROM_ADDR_KEYA_TICKS, keyaTicksPerDeg);
         }
 

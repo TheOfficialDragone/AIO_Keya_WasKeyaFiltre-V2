@@ -2,7 +2,7 @@
 
 #include <NativeEthernet.h>
 #include <string.h>
-
+#include "FXUtil.h"		// read_ascii_line(), hex file support
 extern "C" {
 #include "FlashTxx.h"
 }
@@ -10,6 +10,7 @@ extern "C" {
 EthernetUpdater::EthernetUpdater()
 	: comm_(),
 	destination_(),
+	sender_(),
 	started_(false),
 	updateMode_(false),
 	packetLength_(0),
@@ -46,22 +47,24 @@ void EthernetUpdater::poll()
 	{
 		return;
 	}
-
 	packetLength_ = comm_.parsePacket();
 	if (packetLength_ == 0)
 	{
 		return;
 	}
-
 	if (packetLength_ > sizeof(receivedData_))
 	{
 		packetLength_ = sizeof(receivedData_);
 	}
 
 	comm_.read(receivedData_, packetLength_);
-
 	if (updateMode_)
 	{
+		// Serial.print("update rx len=");
+		// Serial.print(packetLength_);
+		// Serial.print(" first=0x");
+		// Serial.println(receivedData_[0], HEX);
+
 		if (processHexRecord(reinterpret_cast<char*>(receivedData_), packetLength_))
 		{
 			Serial.print("Received update packet with len " + String(packetLength_));
@@ -87,11 +90,13 @@ void EthernetUpdater::poll()
 		{
 			if (goodCRC(receivedData_, pgnLength))
 			{
-
+				sender_ = comm_.remoteIP();
 				if (firmware_buffer_init(&bufferAddr_, &bufferSize_))
 				{
 					Serial.printf("target = %s (%dK flash in %dK sectors)\n", FLASH_ID, FLASH_SIZE / 1024, FLASH_SECTOR_SIZE / 1024);
 					Serial.printf("buffer = %1luK %s (%08lX - %08lX)\n", bufferSize_ / 1024, IN_FLASH(bufferAddr_) ? "FLASH" : "RAM", bufferAddr_, bufferAddr_ + bufferSize_);
+					Serial.print("update sender IP: ");
+					Serial.println(sender_);
 					Serial.println("waiting for hex lines...\n");
 					resetHexState();
 					updateMode_ = true;
@@ -162,10 +167,14 @@ void EthernetUpdater::sendReceiveReady()
 	data[3] = 100;
 	data[4] = crc(data, 4, 0);
 
-	Serial.println("Sending receive ready packet");
+	Serial.print("Sending receive ready packet to broadcast ");
+	Serial.print(destination_);
+	Serial.print(":");
+	Serial.println(SendPort);
 	comm_.beginPacket(destination_, SendPort);
 	comm_.write(data, sizeof(data));
 	comm_.endPacket();
+
 }
 
 int EthernetUpdater::processHexRecord(char* packetBuffer, int packetSize)
@@ -176,6 +185,7 @@ int EthernetUpdater::processHexRecord(char* packetBuffer, int packetSize)
 	}
 	else if (packetBuffer[0] != 0x3a)
 	{
+		started_ = false; // andrew you added this
 		Serial.printf("abort - invalid hex code %d\n", hex_.code);
 		return 0;
 	}

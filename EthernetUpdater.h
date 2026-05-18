@@ -32,6 +32,7 @@ private:
 
     EthernetUDP comm_;
     IPAddress destination_;
+    IPAddress sender_;
     bool started_;
 
     bool updateMode_;

@@ -136,6 +136,9 @@ uint8_t guidanceStatus = 0;
 uint8_t prevGuidanceStatus = 0;
 bool guidanceStatusChanged = false;
 
+// Force-zero manuale: settato dal PGN 252 wasOffset in Keya mode (pulsante zero WAS in AgOpenGPS)
+bool forceZeroNow = false;
+
 //CAN Bus
 bool engageCAN = false;          //Variable for Engage from CAN
 bool workCAN = false;
@@ -499,6 +502,18 @@ void autosteerLoop()
       static bool     azGpsInit    = false;
 
       uint32_t nowMs = millis();
+
+      // Override di emergenza: utente ha premuto il pulsante zero WAS in AgOpenGPS
+      if (forceZeroNow) {
+        keyaZeroTicks = keyaEncoderRaw;
+        wasZeroDone   = true;
+        stableStart   = 0;
+        azAccum       = 0;
+        azCount       = 0;
+        azCooldown    = nowMs;
+        forceZeroNow  = false;
+        Serial.printf("[AZ] FORCE-ZERO eseguito: keyaZeroTicks=%ld\n", (long)keyaZeroTicks);
+      }
 
       // Mode selon etat guidage
       bool guidanceActive = (watchdogTimer < WATCHDOG_THRESHOLD);
@@ -868,6 +883,21 @@ void ReceiveUdp()
 				steerSettings.wasOffset = (autoSteerUdpData[10]);  //read was zero offset Lo
 
 				steerSettings.wasOffset |= (autoSteerUdpData[11] << 8);  //read was zero offset Hi
+
+        // In Keya mode, wasOffset non è usato per il calcolo angolo.
+        // Il pulsante "zero WAS" di AgOpenGPS manda wasOffset = countsPerDeg * (-steerAngle),
+        // producendo un valore che cambia ad ogni pressione.
+        // Rileviamo quel cambio come comando di force-zero manuale (override di emergenza).
+        if (steerConfig.IsDanfoss) {
+          static int16_t prevWasOffset = -32768;  // sentinel: non ancora inizializzato
+          if (prevWasOffset == -32768) {
+            prevWasOffset = steerSettings.wasOffset;  // prima ricezione: init senza trigger
+          } else if (steerSettings.wasOffset != prevWasOffset) {
+            forceZeroNow  = true;
+            prevWasOffset = steerSettings.wasOffset;
+            Serial.println("[AZ] FORCE-ZERO: pulsante WAS rilevato");
+          }
+        }
 
 				steerSettings.AckermanFix = (float)autoSteerUdpData[12] * 0.01;
 

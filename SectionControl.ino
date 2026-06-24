@@ -907,8 +907,9 @@ void sendManualAutoStatus()
 //  MISE À JOUR DU MAPPING (depuis AgOpenGPS - PGN 200)
 // ============================================================================
 
-void updatePinMapping(uint8_t* udpData)
+void updatePinMapping(uint8_t* udpData, uint16_t len)
 {
+    if (len < 29) return;
     for (uint8_t i = 0; i < 24; i++) pin[i] = udpData[i + 5];
     EEPROM.put(120, pin);
 }

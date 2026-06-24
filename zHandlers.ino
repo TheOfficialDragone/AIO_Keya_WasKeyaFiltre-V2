@@ -2,7 +2,7 @@
 const char *asciiHex = "0123456789ABCDEF";
 
 // the new PANDA sentence buffer
-char nmea[100];
+char nmea[200];
 
 // GGA
 char fixTime[12];

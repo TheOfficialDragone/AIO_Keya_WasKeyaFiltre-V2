@@ -110,7 +110,7 @@ bool azMenuLoop()
 
     if (azMenuChoice == 11) {
       // Reset defaut
-      azParams = { 1.0f, 0.8f, 1.0f, 500, 200, 3.0f, 12.0f, 1, 1, 0.05f, 0xA203 };
+      azParams = { 2.5f, 0.8f, 0.3f, 500, 200, 3.0f, 12.0f, 1, 1, 0.05f, 0xA203 };
       EEPROM.put(EEPROM_ADDR_AZ_PARAMS, azParams);
       Serial.println("[AZ-MENU] Valeurs par defaut restaurees et sauvegardees.");
       azMenuPrint();

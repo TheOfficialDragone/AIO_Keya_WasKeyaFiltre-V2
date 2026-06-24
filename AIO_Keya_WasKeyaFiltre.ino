@@ -23,7 +23,7 @@ Stream* NmeaOutputSerial = &Serial2;   //NMEA out
 const int32_t baudAOG = 115200; 
 const int32_t baudGPS = 460800;
 
-int8_t KeyaCurrentSensorReading = 0;
+int16_t KeyaCurrentSensorReading = 0;
 
 #define ImuWire Wire        //SCL=19:A5 SDA=18:A4
 #define RAD_TO_DEG_X_10 572.95779513082320876798154814105

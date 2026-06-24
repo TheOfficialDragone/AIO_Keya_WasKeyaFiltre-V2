@@ -246,7 +246,7 @@ void autosteerSetup()
 		EEPROM.put(10, steerSettings);
 		EEPROM.put(40, steerConfig);
 		EEPROM.put(60, networkAddress);
-    EEPROM.get(70, aogConfig);
+    EEPROM.put(70, aogConfig);
 	}
 	else
 	{
@@ -877,16 +877,6 @@ void ReceiveUdp()
 				//store in EEPROM
 				EEPROM.put(10, steerSettings);
 
-        // En mode Keya : si AOG envoie wasOffset = 0 -> reset zero encodeur
-        if (steerConfig.IsDanfoss && steerSettings.wasOffset == 0) {
-          keyaZeroTicks = keyaEncoderRaw;
-          wasZeroDone   = true;
-          stableStart   = 0;
-          azCorrAccum   = 0.0f;
-          Serial.print("[AZ] Zero force depuis AOG - zeroTicks=");
-          Serial.println(keyaZeroTicks);
-        }
-
 				// Re-Init steer settings
 				//steerSettingsInit();
 			}
@@ -1004,7 +994,7 @@ void ReceiveUdp()
 			}
        else if (autoSteerUdpData[3] == 236) // Relay Pin Settings ajouté par FlorianT
             {
-                updatePinMapping(autoSteerUdpData);
+                updatePinMapping(autoSteerUdpData, len);
             }
       else if (autoSteerUdpData[3] == 238)
             {

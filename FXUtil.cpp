@@ -156,7 +156,8 @@ void read_ascii_line( Stream *serial, char *line, int maxbytes )
       line[nchar++] = c;
     }
   }
-  line[nchar-1] = 0;	// null-terminate
+  if (nchar > 0) line[nchar-1] = 0;
+  else line[0] = 0;
 }
 
 //******************************************************************************

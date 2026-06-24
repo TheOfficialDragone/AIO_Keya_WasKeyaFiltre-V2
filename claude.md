@@ -1,44 +1,56 @@
-# Context: AgOpenGPS - Keya Motor WAS Firmware
+
+# System Prompt & Context: AgOpenGPS - Keya Motor Virtual WAS Firmware
+
+## 🤖 Regole di Comportamento dell'Assistente
+
+* **Estrema Sintesi:** Sii il meno verboso possibile. Fornisci risposte dirette e chirurgiche (es. mostra solo le righe di codice da modificare). Non fornire spiegazioni didattiche a meno che non ti venga esplicitamente richiesto.
+* **Gestione della Documentazione:** Se devi generare un README, scrivere documentazione estesa o file di testo lunghi, **NON** stamparli a video nella chat. Conferma semplicemente di aver compreso e attendi istruzioni su come l'utente preferisce riceverli, oppure fornisci solo comandi per generarli.
 
 ## 📌 Panoramica del Progetto
 
 Questo firmware è una variante per **AgOpenGPS** progettata per girare su piattaforma **Arduino** (specificamente su scheda **Teensy 4.1**).
-La particolarità del sistema è l'eliminazione del sensore di sterzo fisico (WAS - Wheel Angle Sensor) sull'assale anteriore del trattore. L'angolo delle ruote viene calcolato matematicamente in tempo reale sfruttando i dati dell'**encoder integrato nel motore di sterzo Keya**.
+La particolarità del sistema è l'eliminazione del sensore di sterzo fisico (WAS - Wheel Angle Sensor) sull'assale anteriore del trattore. L'angolo delle ruote viene calcolato matematicamente in tempo reale sfruttando esclusivamente i dati dell'**encoder integrato nel motore di sterzo Keya**.
 
 ## 📂 Struttura del Repository e Sorgente di Verità
 
 Nel repository è presente un file chiamato **`repomix-output.xml`**.
-
-Questo file contiene **l'intera codebase esportata in formato XML tramite Repomix** e deve essere considerato una rappresentazione completa della struttura del progetto e dei file sorgente.
+Questo file contiene **l'intera codebase esportata in formato XML tramite Repomix** e deve essere considerato l'unica rappresentazione completa della struttura del progetto e dei file sorgente.
 
 ### Regole di utilizzo di `repomix-output.xml`
 
-* Utilizzare `repomix-output.xml` come riferimento principale per comprendere architettura, relazioni tra file e flusso del firmware.
-* Quando si analizza il comportamento del sistema o si propongono modifiche, considerare sempre il contesto completo della codebase presente nel file XML e non solo singoli file isolati.
-* Evitare di dedurre struttura o dipendenze mancanti: se qualcosa non è chiaro, cercarlo all'interno di `repomix-output.xml`.
-* Le modifiche suggerite devono rimanere compatibili con l'organizzazione attuale del progetto rappresentata nel file.
+* Utilizzare `repomix-output.xml` come riferimento assoluto per comprendere architettura, relazioni tra file e flusso del firmware.
+* Valutare sempre il contesto completo della codebase prima di proporre modifiche: non ragionare mai su singoli file isolati.
+* Non dedurre o inventare dipendenze mancanti: se qualcosa non è chiaro, cercalo all'interno di `repomix-output.xml`.
+* Le modifiche suggerite devono rimanere retrocompatibili con l'attuale architettura.
 
 ## 🛠️ Stack Tecnologico
 
-* **Hardware:** Teensy 4.1, Motore Keya (Autosteer).
+* **Hardware:** Teensy 4.1, Motore Keya (Autosteer / Encoder integrato).
 * **Ambiente di Sviluppo:** Arduino IDE / Teensyduino.
 * **Software di Riferimento:** AgOpenGPS.
 
 ## 🎯 Regole di Sviluppo e Vincoli
 
-* **Preservare la Struttura:** La struttura portante e la logica del codice originale funzionano bene nella maggior parte dei contesti. **NON** è consentito riscrivere il codice da zero o stravolgerne l'architettura.
-* **Interventi Mirati:** Le modifiche devono essere chirurgiche, focalizzate esclusivamente sulla risoluzione dei bug segnalati e sul miglioramento della stabilità dell'algoritmo di calcolo dell'angolo.
-* **Efficienza su Teensy 4.1:** Sebbene il Teensy 4.1 offra elevate prestazioni, il codice deve rimanere snello, reattivo e non deve introdurre ritardi (polling/loop block) nella comunicazione seriale/CAN con il motore Keya o AgOpenGPS.
+* **Preservare la Struttura:** La logica portante del codice originale funziona. **VIETATO** riscrivere il codice da zero o stravolgerne l'architettura.
+* **Interventi Mirati (Chirurgici):** Concentrati solo sulla risoluzione dei bug segnalati e sul perfezionamento della matematica dell'angolo virtuale.
+* **Massima Efficienza:** Il Teensy 4.1 è veloce, ma il codice deve restare non bloccante. Non introdurre ritardi (`delay()`, loop bloccanti o polling inefficaci) nella comunicazione seriale/CAN con il motore Keya o con AgOpenGPS.
 
-## 🐛 Feedback e Problemi da Risolvere
+## 🐛 Analisi dei Problemi (Bug & Feedback sul campo)
 
-* Il sistema è ancora troppo lento nel riallinearsi sulla linea e ritrovare lo zero dopo un’inversione a U.
-* In alcuni casi il sistema non torna allo zero abbastanza rapidamente e le regolazioni effettuate non sembrano migliorare il comportamento.
-* Sono state eseguite prove con BNO disattivato e GPS disattivato, ma il sistema continua a non risultare sufficientemente affidabile.
-* Sono stati aumentati e diminuiti diversi parametri di sensibilità, senza trovare una configurazione soddisfacente.
-* Sono stati testati numerosi valori di configurazione: su un trattore JD il comportamento sembrava abbastanza buono, mentre sul Valtra l’esperienza è stata molto frustrante.
-* In alcune situazioni il sistema considera erroneamente un angolo di circa 15° come direzione corretta e azzera il riferimento.
-* In altri casi il veicolo procede diritto con un errore residuo di circa 7° senza che venga effettuato l’azzeramento.
-* È stato osservato che il sistema tende a confondersi durante le curve.
-* Dopo il ritorno in rettilineo rimane spesso un errore residuo di orientamento (ad esempio circa 9°) invece di ritornare correttamente allo zero.
-* Nel complesso il comportamento percepito non risulta ancora sufficientemente stabile e affidabile nelle diverse condizioni operative.
+I test sul campo hanno dimostrato che il comportamento percepito è inaffidabile. I tentativi di *tuning* dei parametri (sensibilità, PID, ecc.) sono stati inefficaci, il che suggerisce un difetto logico-matematico nel calcolo dell'angolo e non un semplice problema di regolazione. I test con GPS e BNO disattivati confermano che l'errore è intrinseco alla logica di lettura dell'encoder.
+
+I problemi da analizzare e risolvere si dividono in 3 categorie principali:
+
+### 1. Deriva e Falsi Azzeramenti (Center & Zero Drift)
+
+* Falso Centro: In alcune situazioni il sistema considera erroneamente un angolo di ~15° come direzione di marcia dritta e "azzera" scorrettamente il riferimento.
+* Errore Residuo: Durante la marcia in rettilineo, rimane spesso un errore di orientamento costante (es. 7° o 9°) senza che l'algoritmo effettui l'azzeramento per correggerlo.
+
+### 2. Latenza e Confusione in Sterzata (Lag & Tracking Issues)
+
+* Riallineamento Lento: Il sistema impiega troppo tempo per ritrovare la linea e rientrare a zero dopo manovre ampie (es. inversione a U).
+* Disorientamento: Il sistema tende ad "accumulare errore" o a confondersi durante l'esecuzione delle curve.
+
+### 3. Inconsistenza tra Macchine (Geometry Mismatch)
+
+* Il firmware è stato testato su due trattori con esiti diametralmente opposti: su un John Deere il comportamento era discreto, mentre su un Valtra è risultato pessimo. Questo suggerisce che l'algoritmo non sta gestendo o compensando correttamente i diversi rapporti meccanici di sterzo o la geometria di Ackermann specifica di ogni veicolo.

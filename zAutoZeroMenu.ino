@@ -15,7 +15,7 @@
 // Instance globale - valeurs par defaut
 AutoZeroParams azParams = {
   .speedMin    = 2.5f,
-  .yawRateMax  = 0.3f,
+  .yawRateMax  = 0.8f,
   .gpsHdgMax   = 0.3f,
   .timeSlowMs  = 500,
   .timeFastMs  = 200,
@@ -34,7 +34,7 @@ void azMenuSetup()
 {
   AutoZeroParams saved;
   EEPROM.get(EEPROM_ADDR_AZ_PARAMS, saved);
-  if (saved.ident == 0xA202) {
+  if (saved.ident == 0xA203) {
     azParams = saved;
     Serial.println("[AZ-MENU] Parametres charges depuis EEPROM.");
   } else {

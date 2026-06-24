@@ -1,0 +1,4 @@
+i feedback dal campo sono questi: "Feedback so far is that it's still too slow to get one the line and find its zero again after a u-turn"
+"It doesn't zero soon enough sometimes, all the tuning doesn't seem to help. Tried with bno off, GPS off, it doesn't seem reliable enough. Increased and decreased various sensitivity but nothing seems quite right. How's your success been with it?"
+"I've tried a lot of different values, on the JD I was at on Friday it seemed pretty good, but the Valtra was just frustration. It was either decided like 15deg was straight ahead and zeroing, or driving straight at 7deg, and never zeroing."
+"Yeah I found it gets confused on turns too, come back to straight and it's like 9deg or something."

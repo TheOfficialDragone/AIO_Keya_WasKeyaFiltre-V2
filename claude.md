@@ -1,56 +1,69 @@
+# AgOpenGPS Firmware - Claude Code Instructions (Keya Motor Virtual WAS)
 
-# System Prompt & Context: AgOpenGPS - Keya Motor Virtual WAS Firmware
+## 📌 Project Overview & Philosophy
+This repository contains a specialized microcontroller firmware variant for **AgOpenGPS** running on a **Teensy 4.1**. 
+Its defining feature is the **elimination of the physical Wheel Angle Sensor (WAS)** on the tractor's front axle. Instead, the wheel angle is calculated mathematically in real-time utilizing **only the encoder data from the Keya steering motor** (Virtual WAS).
 
-## 🤖 Regole di Comportamento dell'Assistente
+### 💡 Core Guidelines
+* **Practical over Perfect:** Follow the official AgOpenGPS philosophy: *Practical working code > perfect architecture*. Priority is field-tested stability and getting it working in the mud.
+* **Safety First:** Always maintain hardware fail-safes. If communication with AgOpenGPS or the CAN/Serial motor bus drops, immediately disengage steering.
+* **Code Comments:** All code comments, variables, and function names must be in **English**.
 
-* **Estrema Sintesi:** Sii il meno verboso possibile. Fornisci risposte dirette e chirurgiche (es. mostra solo le righe di codice da modificare). Non fornire spiegazioni didattiche a meno che non ti venga esplicitamente richiesto.
-* **Gestione della Documentazione:** Se devi generare un README, scrivere documentazione estesa o file di testo lunghi, **NON** stamparli a video nella chat. Conferma semplicemente di aver compreso e attendi istruzioni su come l'utente preferisce riceverli, oppure fornisci solo comandi per generarli.
+---
 
-## 📌 Panoramica del Progetto
+## 🤖 Assistant Behavior Rules (Strict)
 
-Questo firmware è una variante per **AgOpenGPS** progettata per girare su piattaforma **Arduino** (specificamente su scheda **Teensy 4.1**).
-La particolarità del sistema è l'eliminazione del sensore di sterzo fisico (WAS - Wheel Angle Sensor) sull'assale anteriore del trattore. L'angolo delle ruote viene calcolato matematicamente in tempo reale sfruttando esclusivamente i dati dell'**encoder integrato nel motore di sterzo Keya**.
+* **Extreme Conciseness:** Be as non-verbose as possible. Provide direct, surgical answers. Show *only* the specific lines of code to modify. Do not provide textbook or educational explanations unless explicitly requested.
+* **Documentation Management:** If asked to generate a README or extensive text, **DO NOT** print it in the chat. Confirm understanding and wait for instructions on delivery, or provide CLI commands to generate it.
 
-## 📂 Struttura del Repository e Sorgente di Verità
 
-Nel repository è presente un file chiamato **`repomix-output.xml`**.
-Questo file contiene **l'intera codebase esportata in formato XML tramite Repomix** e deve essere considerato l'unica rappresentazione completa della struttura del progetto e dei file sorgente.
+---
 
-### Regole di utilizzo di `repomix-output.xml`
+## 📂 Repository Structure & Source of Truth
 
-* Utilizzare `repomix-output.xml` come riferimento assoluto per comprendere architettura, relazioni tra file e flusso del firmware.
-* Valutare sempre il contesto completo della codebase prima di proporre modifiche: non ragionare mai su singoli file isolati.
-* Non dedurre o inventare dipendenze mancanti: se qualcosa non è chiaro, cercalo all'interno di `repomix-output.xml`.
-* Le modifiche suggerite devono rimanere retrocompatibili con l'attuale architettura.
+The single source of truth for this entire codebase is the file **`repomix-output.xml`** located in the root. It contains the full project state exported via Repomix.
 
-## 🛠️ Stack Tecnologico
+* **Reference:** Always analyze `repomix-output.xml` to understand file relationships, dependencies, and architecture before proposing changes. Never guess dependencies.
+* **Preservation:** The baseline architecture works. **DO NOT** rewrite from scratch. Implement targeted, backward-compatible surgical fixes.
 
-* **Hardware:** Teensy 4.1, Motore Keya (Autosteer / Encoder integrato).
-* **Ambiente di Sviluppo:** Arduino IDE / Teensyduino.
-* **Software di Riferimento:** AgOpenGPS.
+---
 
-## 🎯 Regole di Sviluppo e Vincoli
+## 🌿 Git Branching Strategy
 
-* **Preservare la Struttura:** La logica portante del codice originale funziona. **VIETATO** riscrivere il codice da zero o stravolgerne l'architettura.
-* **Interventi Mirati (Chirurgici):** Concentrati solo sulla risoluzione dei bug segnalati e sul perfezionamento della matematica dell'angolo virtuale.
-* **Massima Efficienza:** Il Teensy 4.1 è veloce, ma il codice deve restare non bloccante. Non introdurre ritardi (`delay()`, loop bloccanti o polling inefficaci) nella comunicazione seriale/CAN con il motore Keya o con AgOpenGPS.
+* **`main` Branch:** Absolute stability. The code must always be fully functional, solid, and field-tested. Prioritize proven, robust architectures over novelty.
+* **`experimental` Branch:** Development and R&D. This is the designated playground for testing new logic, unverified algorithms, and experimental features.
+* **No Auto-Merging:** Never perform, script, or propose a branch merge (e.g., merging `experimental` into `main`) unless explicitly requested by the user.
 
-## 🐛 Analisi dei Problemi (Bug & Feedback sul campo)
+## 🛠️ Tech Stack & Communication Quick Ref
 
-I test sul campo hanno dimostrato che il comportamento percepito è inaffidabile. I tentativi di *tuning* dei parametri (sensibilità, PID, ecc.) sono stati inefficaci, il che suggerisce un difetto logico-matematico nel calcolo dell'angolo e non un semplice problema di regolazione. I test con GPS e BNO disattivati confermano che l'errore è intrinseco alla logica di lettura dell'encoder.
+* **Hardware:** Teensy 4.1, Keya Motor (Autosteer via Integrated Encoder), No physical WAS.
+* **IDE:** Arduino IDE / Teensyduino / PlatformIO.
+* **Real-time Rules:** Keep the `loop()` non-blocking. No `delay()`, no blocking polling on Serial/CAN.
 
-I problemi da analizzare e risolvere si dividono in 3 categorie principali:
+### AgOpenGPS Standard PGN Reference
+* **PC to MCU (Autosteer Cmd - PGN 245):** Starts with `0x80`, `0x81`, ID `0x7F`. Contains steering commands and section triggers.
+* **MCU to PC (Telemetry - PGN 253):** Starts with `0x80`, `0x81`, ID `0xFD`. Sends back calculated (Virtual) WAS, Roll, Heading, and switches.
 
-### 1. Deriva e Falsi Azzeramenti (Center & Zero Drift)
+---
 
-* Falso Centro: In alcune situazioni il sistema considera erroneamente un angolo di ~15° come direzione di marcia dritta e "azzera" scorrettamente il riferimento.
-* Errore Residuo: Durante la marcia in rettilineo, rimane spesso un errore di orientamento costante (es. 7° o 9°) senza che l'algoritmo effettui l'azzeramento per correggerlo.
+## 🐛 Field Issues & Debugging Context (Priority Targets)
 
-### 2. Latenza e Confusione in Sterzata (Lag & Tracking Issues)
+Field tests show algorithmic issues in the Virtual WAS logic (independent of GPS/BNO). Keep these systemic errors in mind for any math modifications:
 
-* Riallineamento Lento: Il sistema impiega troppo tempo per ritrovare la linea e rientrare a zero dopo manovre ampie (es. inversione a U).
-* Disorientamento: Il sistema tende ad "accumulare errore" o a confondersi durante l'esecuzione delle curve.
+### 1. Center & Zero Drift
+* **False Center:** The system occasionally misinterprets an angle of ~15° as straight ahead, incorrectly resetting the zero reference point.
+* **Residual Error:** During straight-line driving, a constant offset (e.g., 7° to 9°) often remains uncorrected without triggering an automatic re-zeroing.
 
-### 3. Inconsistenza tra Macchine (Geometry Mismatch)
+### 2. Lag & Tracking Issues
+* **Slow Realignment:** The system takes too long to find the guidance line and return to zero after sharp maneuvers (e.g., U-turns).
+* **Disorientation:** The encoder math tends to accumulate error or lose track during continuous curves.
 
-* Il firmware è stato testato su due trattori con esiti diametralmente opposti: su un John Deere il comportamento era discreto, mentre su un Valtra è risultato pessimo. Questo suggerisce che l'algoritmo non sta gestendo o compensando correttamente i diversi rapporti meccanici di sterzo o la geometria di Ackermann specifica di ogni veicolo.
+### 3. Geometry Mismatch (Ackermann & Steering Ratios)
+* **Vehicle Inconsistency:** Performance is decent on a John Deere but unusable on a Valtra. The algorithm currently fails to account for different mechanical steering ratios, steering wheel turns lock-to-lock, or vehicle geometry differences.
+
+---
+
+## Build
+
+```bash
+# Verify compilation using Arduino CLI or PlatformIO if configured, or build via standard Teensyduino.

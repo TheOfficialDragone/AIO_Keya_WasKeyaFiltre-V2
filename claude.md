@@ -58,9 +58,6 @@ Field tests show algorithmic issues in the Virtual WAS logic (independent of GPS
 * **Slow Realignment:** The system takes too long to find the guidance line and return to zero after sharp maneuvers (e.g., U-turns).
 * **Disorientation:** The encoder math tends to accumulate error or lose track during continuous curves.
 
-### 3. Geometry Mismatch (Ackermann & Steering Ratios)
-* **Vehicle Inconsistency:** Performance is decent on a John Deere but unusable on a Valtra. The algorithm currently fails to account for different mechanical steering ratios, steering wheel turns lock-to-lock, or vehicle geometry differences.
-
 ---
 
 ## Build

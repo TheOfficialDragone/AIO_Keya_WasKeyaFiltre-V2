@@ -490,6 +490,7 @@ void autosteerLoop()
     {
     static const float AZ_NEAR_ZERO_DEG    = 2.0f;
     static const float AZ_NEAR_ZERO_FACTOR = 0.3f;
+    static const float AZ_RAPIDE_MAX_DEG   = 5.0f;  // ruota deve essere quasi dritta per AZ-RAPIDE
     {
       static float    azLastYaw    = 0.0f;
       static uint32_t azLastTime   = 0;
@@ -517,6 +518,14 @@ void autosteerLoop()
 
       // Mode selon etat guidage
       bool guidanceActive = (watchdogTimer < WATCHDOG_THRESHOLD);
+
+      // Reset cooldown quando guidance si riattiva (post-capezzagna → AZ-PRECIS parte subito)
+      static bool prevGuidanceActive = false;
+      if (guidanceActive && !prevGuidanceActive) {
+        azCooldown  = 0;
+        stableStart = 0; azAccum = 0; azCount = 0;
+      }
+      prevGuidanceActive = guidanceActive;
 
       // --- Yaw rate BNO08x [deg/s] ---
       float yawRate = 0.0f;
@@ -617,12 +626,14 @@ void autosteerLoop()
         if ((nowMs - stableStart) > azTimeMs && azCount > 0)
         {
           int32_t meanTicks = (int32_t)(azAccum / (int64_t)azCount);
+          bool appliedZero = false;
 
           if (!wasZeroDone)
           {
             keyaZeroTicks = meanTicks;
             wasZeroDone   = true;
             azCorrAccum   = 0.0f;
+            appliedZero   = true;
             Serial.print(guidanceActive ? "[AZ-PRECIS] " : "[AZ-RAPIDE] ");
             Serial.print("*** PREMIER ZERO ETABLI *** (");
             Serial.print(azCount); Serial.print(" ech) zeroTicks=");
@@ -630,15 +641,21 @@ void autosteerLoop()
           }
           else if (!guidanceActive)
           {
-            // MODE RAPIDE : saut direct a meanTicks
-            int32_t oldZero = keyaZeroTicks;
-            keyaZeroTicks   = meanTicks;
-            azCorrAccum     = 0.0f;
-            float deltaDeg  = (float)(keyaZeroTicks - oldZero) / keyaTicksPerDeg;
-            Serial.print("[AZ-RAPIDE] Saut direct: ");
-            Serial.print(deltaDeg, 2); Serial.print("deg");
-            Serial.print(" zero: "); Serial.print(oldZero);
-            Serial.print(" -> ");    Serial.println(keyaZeroTicks);
+            // MODE RAPIDE : saut direct SOLO se ruota quasi dritta (guard anti-capezzagna)
+            if (fabsf(steerAngleActual) < AZ_RAPIDE_MAX_DEG) {
+              int32_t oldZero = keyaZeroTicks;
+              keyaZeroTicks   = meanTicks;
+              azCorrAccum     = 0.0f;
+              appliedZero     = true;
+              float deltaDeg  = (float)(keyaZeroTicks - oldZero) / keyaTicksPerDeg;
+              Serial.print("[AZ-RAPIDE] Saut direct: ");
+              Serial.print(deltaDeg, 2); Serial.print("deg");
+              Serial.print(" zero: "); Serial.print(oldZero);
+              Serial.print(" -> ");    Serial.println(keyaZeroTicks);
+            } else {
+              Serial.printf("[AZ-RAPIDE] SKIP: ruota %.1fdeg > %.1fdeg - non azzero\n",
+                            steerAngleActual, AZ_RAPIDE_MAX_DEG);
+            }
           }
           else
           {
@@ -650,6 +667,7 @@ void autosteerLoop()
               int32_t oldZero = keyaZeroTicks;
               keyaZeroTicks  += corrInt;
               azCorrAccum    -= (float)corrInt;
+              appliedZero     = true;
               Serial.print("[AZ-PRECIS] Recalage: angle="); Serial.print(steerAngleActual, 2);
               Serial.print(" adapt="); Serial.print(adaptFactor, 2);
               Serial.print(" corr=");  Serial.print(corrInt);
@@ -661,14 +679,16 @@ void autosteerLoop()
             }
           }
 
-          Serial.print("[AZ] zeroTicks="); Serial.print(keyaZeroTicks);
-          Serial.print(" offsetDeg=");
-          Serial.println((float)keyaZeroTicks / keyaTicksPerDeg, 2);
+          if (appliedZero) {
+            Serial.print("[AZ] zeroTicks="); Serial.print(keyaZeroTicks);
+            Serial.print(" offsetDeg=");
+            Serial.println((float)keyaZeroTicks / keyaTicksPerDeg, 2);
+            azCooldown = nowMs;
+          }
 
           azAccum     = 0;
           azCount     = 0;
           stableStart = 0;
-          azCooldown  = nowMs;
         }
       }
       else

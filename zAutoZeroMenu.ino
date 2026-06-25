@@ -16,15 +16,15 @@
 AutoZeroParams azParams = {
   .speedMin    = 2.5f,
   .yawRateMax  = 0.8f,
-  .gpsHdgMax   = 0.3f,
+  .gpsHdgMax   = 1.5f,   // GPS noise ~0.5deg/sample EMA → 0.3 era troppo stretto
   .timeSlowMs  = 500,
   .timeFastMs  = 200,
   .speedSlow   = 3.0f,
   .speedFast   = 12.0f,
   .useBno      = 1,      // BNO actif par defaut
   .useGps      = 1,      // GPS actif par defaut
-  .beta        = 0.05f,  // correction douce : 5% de l'erreur par cycle
-  .ident       = 0xA203  // bump: forza reload dopo fix unità yaw (0xA202 -> 0xA203)
+  .beta        = 0.15f,  // 3x piu veloce del vecchio 0.05 (ancora conservativo)
+  .ident       = 0xA204  // forza reload con nuovi defaults (0xA203 -> 0xA204)
 };
 
 // -----------------------------------------------------------------
@@ -34,7 +34,7 @@ void azMenuSetup()
 {
   AutoZeroParams saved;
   EEPROM.get(EEPROM_ADDR_AZ_PARAMS, saved);
-  if (saved.ident == 0xA203) {
+  if (saved.ident == 0xA204) {
     azParams = saved;
     Serial.println("[AZ-MENU] Parametres charges depuis EEPROM.");
   } else {
@@ -110,7 +110,7 @@ bool azMenuLoop()
 
     if (azMenuChoice == 11) {
       // Reset defaut
-      azParams = { 2.5f, 0.8f, 0.3f, 500, 200, 3.0f, 12.0f, 1, 1, 0.05f, 0xA203 };
+      azParams = { 2.5f, 0.8f, 1.5f, 500, 200, 3.0f, 12.0f, 1, 1, 0.15f, 0xA204 };
       EEPROM.put(EEPROM_ADDR_AZ_PARAMS, azParams);
       Serial.println("[AZ-MENU] Valeurs par defaut restaurees et sauvegardees.");
       azMenuPrint();

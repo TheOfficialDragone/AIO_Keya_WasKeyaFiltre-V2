@@ -31,6 +31,14 @@ extern float          emaRollAlpha;
 extern float          emaPitchAlpha;
 extern float          emaStopKmh;
 
+extern float          azRapideMaxDeg;
+extern uint32_t       azCooldownMs;
+extern float          azNearZeroDeg;
+extern float          azNearZeroFactor;
+
+// EEPROM_ADDR_AZ_RAPIDE_MAX/COOLDOWN/NEAR_DEG/NEAR_FACTOR
+// defined in AIO_Keya_WasKeyaFiltre.ino (included first by Arduino)
+
 #define EEPROM_ADDR_EMA_YAW   150
 #define EEPROM_ADDR_EMA_ROLL  154
 #define EEPROM_ADDR_EMA_PITCH 158
@@ -128,6 +136,31 @@ static void handlePost(const String& body)
   if (ticks > 1.0f && ticks < 500.0f) {
     keyaTicksPerDeg = ticks;
     EEPROM.put(EEPROM_ADDR_KEYA_TICKS, keyaTicksPerDeg);
+  }
+
+  // Parametri avanzati auto-zero
+  {
+    float fv;
+    fv = extractFloat(body, "azRapideMax", azRapideMaxDeg);
+    if (fv >= 0.5f && fv <= 30.0f) {
+      azRapideMaxDeg = fv;
+      EEPROM.put(EEPROM_ADDR_AZ_RAPIDE_MAX, azRapideMaxDeg);
+    }
+    uint32_t uv = extractUint(body, "azCooldown", azCooldownMs);
+    if (uv >= 200 && uv <= 30000) {
+      azCooldownMs = uv;
+      EEPROM.put(EEPROM_ADDR_AZ_COOLDOWN, azCooldownMs);
+    }
+    fv = extractFloat(body, "azNearDeg", azNearZeroDeg);
+    if (fv >= 0.5f && fv <= 15.0f) {
+      azNearZeroDeg = fv;
+      EEPROM.put(EEPROM_ADDR_AZ_NEAR_DEG, azNearZeroDeg);
+    }
+    fv = extractFloat(body, "azNearFactor", azNearZeroFactor);
+    if (fv >= 0.0f && fv <= 1.0f) {
+      azNearZeroFactor = fv;
+      EEPROM.put(EEPROM_ADDR_AZ_NEAR_FACTOR, azNearZeroFactor);
+    }
   }
 
   // BNO EMA filters
@@ -427,10 +460,52 @@ static void sendPage(EthernetClient& c)
     "Mechanical ratio: encoder ticks per wheel steering degree. "
     "<b>Default 24.0</b> = 4 motor turns for 60 deg lock-to-lock. "
     "If AOG angle is too large: increase. Too small: decrease. "
-    "Formula: (motor_turns x 65535) / total_angle_deg.");
+    "Calibration: set to 1.0, steer to known angle, read displayed value, "
+    "new value = displayed / real_degrees. Formula: (motor_turns x 360) / total_angle_deg.");
 
   // ================================================================
-  // SECTION 5: BNO EMA FILTERS
+  // SECTION 5: ADVANCED AUTO-ZERO PARAMETERS
+  // ================================================================
+  c.println("<h2>&#9881; Advanced auto-zero parameters</h2>");
+
+  c.print("<div class='desc' style='color:#888;margin-bottom:9px'>");
+  c.print("Fine-tuning of the auto-zero algorithm. Change only if you have field issues. "
+    "Default values are conservative and safe.");
+  c.println("</div>");
+
+  rowNum(c,
+    "AZ-RAPIDE max angle",
+    "azRapideMax", azRapideMaxDeg, 1, "deg",
+    "Maximum wheel angle allowed for a fast zero reset (guidance OFF). "
+    "<b>Critical:</b> if your residual offset is larger than this value, "
+    "auto-zero will never correct it. "
+    "Increase if you have persistent 7-9 deg offsets. "
+    "Recommended: <b>10.0 - 15.0 deg</b>. Default: 5.0.");
+
+  rowNum(c,
+    "Cooldown between corrections",
+    "azCooldown", (float)azCooldownMs, 0, "ms",
+    "Minimum time between two successive zero corrections. "
+    "Lower = faster convergence but more sensitive to noise. "
+    "Recommended: <b>1000 - 3000 ms</b>. Default: 2000.");
+
+  rowNum(c,
+    "Near-zero adaptive zone",
+    "azNearDeg", azNearZeroDeg, 1, "deg",
+    "When angle is within this zone, BNO/GPS thresholds are tightened "
+    "to avoid correcting while in a gentle turn. "
+    "Recommended: <b>1.5 - 3.0 deg</b>. Default: 2.0.");
+
+  rowNum(c,
+    "Near-zero threshold reduction factor",
+    "azNearFactor", azNearZeroFactor, 2, "",
+    "At angle=0, thresholds are multiplied by this factor. "
+    "<b>0.0</b> = very strict (correct only on perfectly straight line). "
+    "<b>1.0</b> = no reduction (disable adaptive). "
+    "Recommended: <b>0.2 - 0.4</b>. Default: 0.3.");
+
+  // ================================================================
+  // SECTION 6: BNO EMA FILTERS
   // ================================================================
   c.println("<h2>&#127919; BNO08x anti-jitter EMA filters</h2>");
 

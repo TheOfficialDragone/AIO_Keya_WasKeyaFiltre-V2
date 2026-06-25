@@ -14,7 +14,7 @@ The wheel angle is calculated in real time using the **encoder integrated into t
 
 A traditional autosteer setup uses a physical potentiometer (WAS) on the front axle to measure the steering angle. This requires mechanical installation, calibration, and a cable across the tractor. This firmware replaces it entirely with the Keya motor's internal encoder.
 
-The Keya motor sends a CAN heartbeat (ID `0x07000001`) every few milliseconds. Bytes 0–1 contain a `uint16` cumulative tick counter (0–65535 = 1 full motor revolution). By accumulating signed deltas between consecutive heartbeats, the firmware tracks absolute motor position:
+The Keya motor sends a CAN heartbeat (ID `0x07000001`) every ~20 ms. Bytes 0–1 contain a `uint16` cumulative angle counter where **1 tick = 1° of motor shaft** (360 ticks = 1 full revolution, per Keya manual section 4.5.2: "Cumulative value of angle, 360°/circle"). The counter wraps at 65535 (after ~182 revolutions). By accumulating signed deltas between consecutive heartbeats, the firmware tracks absolute motor position:
 
 ```
 keyaEncoderRaw += (int16_t)(currentTick - previousTick)
@@ -30,7 +30,7 @@ The conversion ratio `keyaTicksPerDeg` maps encoder counts to steering degrees:
 steerAngleActual = (keyaEncoderRaw - keyaZeroTicks) / keyaTicksPerDeg
 ```
 
-Default: **24 ticks/degree** (approximately 4 motor turns × 65535 ticks/turn ÷ 60° lock-to-lock). This value is adjustable via the `Steer Sensor Counts` slider in AgOpenGPS (proportional to a 100 = default baseline) and is saved to EEPROM.
+Default: **24 ticks/degree** (4 motor turns × 360 ticks/turn ÷ 60° lock-to-lock). This value is calibrated on the field via the web interface and saved to EEPROM. Calibration procedure: set to 1.0, steer to a known real angle, read displayed value → `keyaTicksPerDeg = displayed / real_degrees`.
 
 ### The Zero Problem — Auto-Zero
 
@@ -51,7 +51,7 @@ On every 40 Hz loop iteration, the system checks four conditions simultaneously:
 | Speed above minimum | `speedMin` | 2.5 km/h | GPS VTG |
 | BNO yaw rate below maximum | `yawRateMax` | 0.8 deg/s | BNO08x |
 | GPS heading variation below maximum | `gpsHdgMax` | 1.5 deg/loop | GPS VTG EMA |
-| Cooldown elapsed since last zero | 2000 ms | hardcoded | internal |
+| Cooldown elapsed since last zero | `azCooldownMs` | 2000 ms | configurable via web |
 
 The GPS heading is filtered with an **EMA (Exponential Moving Average)** filter before the rate check, reducing GPS noise.
 
@@ -59,24 +59,25 @@ When all conditions are met for a continuous period (`timeSlowMs` at low speed, 
 
 ### Adaptive Thresholds
 
-When guidance is active and the tractor is near zero angle (< 2°), thresholds tighten by a factor of 0.3:
+When guidance is active and the tractor is near zero angle (< `azNearZeroDeg`, default 2°), thresholds tighten by a factor of `azNearZeroFactor` (default 0.3):
 
 ```
-adaptFactor = 0.3 + (absAngle / 2.0) * (1.0 - 0.3)   // at 0°: factor = 0.3 (strictest)
+adaptFactor = azNearZeroFactor + (absAngle / azNearZeroDeg) * (1.0 - azNearZeroFactor)
 yawRateMax_effective = yawRateMax * adaptFactor
 ```
 
-This prevents false zeros when the PID is fighting a small residual error near center.
+This prevents false zeros when the PID is fighting a small residual error near center. Both parameters are configurable via web interface.
 
 ### Two Auto-Zero Modes
 
 The behavior differs based on whether guidance (autosteer) is currently active:
 
 **AZ-RAPIDE** (guidance OFF — e.g., headland turns, manual driving):
-- Direct jump: `keyaZeroTicks = meanTicks` — but **only if `|steerAngleActual| < 5°`**
+- Direct jump: `keyaZeroTicks = meanTicks` — but **only if `|steerAngleActual| < azRapideMaxDeg`** (default 5°, configurable via web)
 - If the wheel is turned (e.g., mid-capezzagna), the jump is skipped and the stable timer resets
 - No cooldown penalty on skipped jumps — retries immediately on next stable window
 - Fast realignment after U-turns once wheel is straight
+- **Note:** if residual offset exceeds `azRapideMaxDeg`, raise this parameter on the web page
 
 **AZ-PRECIS** (guidance ON — actively following a line):
 - Soft beta correction to avoid destabilizing active steering:
@@ -85,7 +86,7 @@ The behavior differs based on whether guidance (autosteer) is currently active:
   keyaZeroTicks += (int32_t)azCorrAccum   // only when accumulation reaches 1 full tick
   ```
 - `beta` default 0.15 = 15% of error corrected per stable window (~15s to correct 5° drift)
-- When guidance re-engages after a headland turn, cooldown is immediately reset so AZ-PRECIS starts without the 2s wait
+- When guidance re-engages after a headland turn, cooldown is immediately reset so AZ-PRECIS starts without the `azCooldownMs` wait
 - Sub-tick accumulation ensures no correction is lost due to integer truncation
 
 The auto-zero is blocked until `wasZeroDone = true`. Until then, the watchdog is forced active so autosteer cannot engage without a valid zero reference.
@@ -194,7 +195,7 @@ The firmware prints structured debug messages in real time:
 [AZ-RAPIDE] Debut periode stable (adapt=1.00)...
 [AZ-RAPIDE] stable 312/500ms spd=5.2 bno=OK yawR=0.12/0.80 gps=OK gpsR=0.05/1.50 adapt=1.00 angle=-0.08 enc=14523
 [AZ-RAPIDE] Saut direct: -0.12deg zero: 14567 -> 14524
-[AZ-RAPIDE] SKIP: ruota 14.8deg > 5.0deg - non azzero         ← capezzagna guard
+[AZ-RAPIDE] SKIP: ruota 14.8deg > 10.0deg - non azzero        ← capezzagna guard (azRapideMaxDeg)
 [AZ-PRECIS] Recalage: angle=0.35 adapt=0.53 corr=1 zero: 14524 -> 14525
 [AZ] FORCE-ZERO eseguito: keyaZeroTicks=14523
 ```
@@ -214,7 +215,15 @@ Prefix legend: `[AZ-RAPIDE]` = guidance off, `[AZ-PRECIS]` = guidance active, `[
 | 70–73 | `aogConfig` (relay, tool lift) |
 | 80–83 | `wasOffsetF` (float — last valid WAS zero offset in degrees) |
 | 84–87 | `keyaTicksPerDeg` (float — mechanical calibration) |
-| 90–… | `AutoZeroParams` (all 10 auto-zero parameters + ident `0xA204`) |
+| 90–129 | `AutoZeroParams` (all 10 auto-zero parameters + ident `0xA204`) |
+| 150–153 | `emaYawAlpha` (float — BNO yaw EMA filter) |
+| 154–157 | `emaRollAlpha` (float — BNO roll EMA filter) |
+| 158–161 | `emaPitchAlpha` (float — BNO pitch EMA filter) |
+| 162–165 | `emaStopKmh` (float — EMA reset speed threshold) |
+| 166–169 | `azRapideMaxDeg` (float — AZ-RAPIDE max wheel angle) |
+| 170–173 | `azCooldownMs` (uint32 — cooldown between corrections) |
+| 174–177 | `azNearZeroDeg` (float — near-zero adaptive zone) |
+| 178–181 | `azNearZeroFactor` (float — adaptive threshold reduction factor) |
 
 ---
 

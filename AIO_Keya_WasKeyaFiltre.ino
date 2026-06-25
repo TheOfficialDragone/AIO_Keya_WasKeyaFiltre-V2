@@ -88,22 +88,54 @@ static const uint32_t AUTOZERO_TIME_FAST_MS = 200;
 // ENCODEUR KEYA comme WAS (remplace ADS1115)
 // Utilise uniquement si IsDanfoss == 1
 //
-// Le heartbeat Keya (ID 0x07000001, bytes 0-1) contient un compteur
-// cumulatif uint16 : 65535 ticks = 1 tour moteur.
+// Heartbeat Keya (ID 0x07000001, bytes 0-1): angle cumulatif moteur.
+// Unite: 360 ticks = 1 tour moteur (1 tick = 1 degre axe moteur).
 // On accumule les deltas (int16 signe) dans keyaEncoderRaw (int32).
 //
-// RATIO MECANIQUE (a calibrer) :
+// RATIO MECANIQUE (a calibrer sur le terrain):
 //   Butee a butee = 60deg braquage roue = ~4 tours moteur
-//   4 x 65535 = 262140 ticks -> KEYA_TICKS_PER_DEG ~ 4369 ticks/deg
+//   4 x 360 = 1440 ticks -> KEYA_TICKS_PER_DEG = 1440/60 = 24 ticks/deg
 //   Sauvegarde EEPROM adresse 84 pour modification sans recompilation.
 // -----------------------------------------------------------------------
-#define KEYA_TICKS_PER_DEG_DEFAULT  24.0f     // 4 tours x 360 ticks/tour / 60deg = 24 ticks/deg
+#define KEYA_TICKS_PER_DEG_DEFAULT  24.0f
 #define KEYA_STEER_RANGE_DEG        30.0f
 #define EEPROM_ADDR_KEYA_TICKS      84
 
-float    keyaTicksPerDeg = KEYA_TICKS_PER_DEG_DEFAULT;
-int32_t  keyaZeroTicks   = 0;
-bool     wasZeroDone     = false;
+// --- Parametres auto-zero avances (configurables via web) ---
+#define EEPROM_ADDR_AZ_RAPIDE_MAX   166   // float
+#define EEPROM_ADDR_AZ_COOLDOWN     170   // uint32_t
+#define EEPROM_ADDR_AZ_NEAR_DEG     174   // float
+#define EEPROM_ADDR_AZ_NEAR_FACTOR  178   // float
+
+float    keyaTicksPerDeg   = KEYA_TICKS_PER_DEG_DEFAULT;
+int32_t  keyaZeroTicks     = 0;
+bool     wasZeroDone       = false;
+
+// Parametres avances auto-zero (defaults conservateurs)
+float    azRapideMaxDeg    = 5.0f;    // max angle ruota pour AZ-RAPIDE
+uint32_t azCooldownMs      = 2000;    // cooldown entre corrections [ms]
+float    azNearZeroDeg     = 2.0f;    // zone adaptative pres du zero [deg]
+float    azNearZeroFactor  = 0.3f;    // facteur de reduction des seuils pres du zero
+
+void azAdvancedParamsLoad()
+{
+  float fv; uint32_t uv;
+
+  EEPROM.get(EEPROM_ADDR_AZ_RAPIDE_MAX, fv);
+  if (!isnan(fv) && fv >= 0.5f && fv <= 30.0f) azRapideMaxDeg = fv;
+
+  EEPROM.get(EEPROM_ADDR_AZ_COOLDOWN, uv);
+  if (uv >= 200 && uv <= 30000) azCooldownMs = uv;
+
+  EEPROM.get(EEPROM_ADDR_AZ_NEAR_DEG, fv);
+  if (!isnan(fv) && fv >= 0.5f && fv <= 15.0f) azNearZeroDeg = fv;
+
+  EEPROM.get(EEPROM_ADDR_AZ_NEAR_FACTOR, fv);
+  if (!isnan(fv) && fv >= 0.0f && fv <= 1.0f) azNearZeroFactor = fv;
+
+  Serial.printf("[AZ-ADV] rapideMax=%.1f cool=%lums nearDeg=%.1f nearFact=%.2f\n",
+    azRapideMaxDeg, (unsigned long)azCooldownMs, azNearZeroDeg, azNearZeroFactor);
+}
 
 // Variables declarees dans KeyaCANBUS.ino – forward declaration pour Autosteer.ino
 extern int32_t  keyaEncoderRaw;

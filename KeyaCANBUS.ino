@@ -151,7 +151,7 @@ void SteerKeya(int steerSpeed) {
 
 // ---------------------------------------------------------------------------
 // Keya encoder – position cumulée issue du heartbeat (bytes 0-1)
-// Unité : 65535 ticks = 1 tour moteur = 360° moteur
+// Unité : 360 ticks = 1 tour moteur (1 tick = 1 degre axe moteur).
 // Le compteur hardware est uint16 (0-65535) et peut déborder dans les deux sens.
 // On accumule les deltas dans un int32 signé pour avoir une position absolue.
 // ---------------------------------------------------------------------------
@@ -172,7 +172,7 @@ void keyaUpdateEncoder(uint16_t rawTick)
 #if KEYA_ENCODER_INVERT
   delta = -delta;
 #endif
-  // Motor KY173DD01005 max 100 RPM, 10ms CAN → ~1092 ticks/msg max. Threshold 5000 = 4.6× max.
+  // Motor KY173DD01005 max 100 RPM, 20ms CAN → ~12 ticks/msg max (360/giro). Threshold 5000 = safe margin.
   if (delta < -5000 || delta > 5000) {
     Serial.printf("[KEYA] encoder jump skipped: delta=%d raw=%u prev=%u\n", delta, rawTick, keyaEncPrev);
     keyaEncPrev = rawTick;

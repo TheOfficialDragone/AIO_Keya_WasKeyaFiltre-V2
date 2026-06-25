@@ -308,6 +308,7 @@ void autosteerSetup()
   // Charger les parametres auto-zero depuis EEPROM
   azMenuSetup();
   emaParamsLoad();
+  azAdvancedParamsLoad();
 
 }// End of Setup
 
@@ -488,9 +489,11 @@ void autosteerLoop()
     // =================================================================
     if (steerConfig.IsDanfoss)
     {
-    static const float AZ_NEAR_ZERO_DEG    = 2.0f;
-    static const float AZ_NEAR_ZERO_FACTOR = 0.3f;
-    static const float AZ_RAPIDE_MAX_DEG   = 5.0f;  // ruota deve essere quasi dritta per AZ-RAPIDE
+    // Parametres configures via web (globals dans AIO_Keya_WasKeyaFiltre.ino)
+    extern float    azRapideMaxDeg;
+    extern float    azNearZeroDeg;
+    extern float    azNearZeroFactor;
+    extern uint32_t azCooldownMs;
     {
       static float    azLastYaw    = 0.0f;
       static uint32_t azLastTime   = 0;
@@ -563,9 +566,9 @@ void autosteerLoop()
       float adaptFactor = 1.0f;
       if (guidanceActive) {
         float absAngle = fabsf(steerAngleActual);
-        if (absAngle < AZ_NEAR_ZERO_DEG) {
-          float ratio = absAngle / AZ_NEAR_ZERO_DEG;
-          adaptFactor = AZ_NEAR_ZERO_FACTOR + ratio * (1.0f - AZ_NEAR_ZERO_FACTOR);
+        if (absAngle < azNearZeroDeg) {
+          float ratio = absAngle / azNearZeroDeg;
+          adaptFactor = azNearZeroFactor + ratio * (1.0f - azNearZeroFactor);
         }
       }
 
@@ -588,7 +591,7 @@ void autosteerLoop()
       bool speedOk    = (gpsSpeed > azParams.speedMin);
       bool straightOk = (!azParams.useBno) || (yawRate < yawRateMax);
       bool gpsCapOk   = (!azParams.useGps) || gpsOk;
-      bool cooldownOk = (nowMs - azCooldown > 2000);
+      bool cooldownOk = (nowMs - azCooldown > azCooldownMs);
 
       // --- DEBUG toutes les 5s si periode stable en cours ---
       if (stableStart > 0 && (nowMs - dbgLastPrint > 5000)) {
@@ -642,7 +645,7 @@ void autosteerLoop()
           else if (!guidanceActive)
           {
             // MODE RAPIDE : saut direct SOLO se ruota quasi dritta (guard anti-capezzagna)
-            if (fabsf(steerAngleActual) < AZ_RAPIDE_MAX_DEG) {
+            if (fabsf(steerAngleActual) < azRapideMaxDeg) {
               int32_t oldZero = keyaZeroTicks;
               keyaZeroTicks   = meanTicks;
               azCorrAccum     = 0.0f;
@@ -654,7 +657,7 @@ void autosteerLoop()
               Serial.print(" -> ");    Serial.println(keyaZeroTicks);
             } else {
               Serial.printf("[AZ-RAPIDE] SKIP: ruota %.1fdeg > %.1fdeg - non azzero\n",
-                            steerAngleActual, AZ_RAPIDE_MAX_DEG);
+                            steerAngleActual, azRapideMaxDeg);
             }
           }
           else

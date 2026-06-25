@@ -233,6 +233,8 @@ Prefix legend: `[AZ-RAPIDE]` = guidance off, `[AZ-PRECIS]` = guidance active, `[
 
 | Commit | Change |
 |--------|--------|
+| `93019bf` | **fix (false zero — first anchor):** First `wasZeroDone` blocked when `\|steerAngleActual\| >= azRapideMaxDeg` (5°) — prevents false anchor point if wheels are not straight at startup; stable timer resets on skip |
+| `93019bf` | **fix (false zero — AZ-PRECIS):** Soft beta correction skipped when `\|steerAngleActual\| >= 10°` — distinguishes real turn curves from residual drift; prevents zero drift accumulation while guidance is active during headland turns |
 | `c766671` | **fix (capezzagna):** AZ-RAPIDE now blocked if `\|steerAngleActual\| >= 5°` — eliminates false zero when wheel is turned during headland maneuvers; azCooldown only set when zero is actually applied; guidance re-engagement resets cooldown immediately for fast AZ-PRECIS restart |
 | `c766671` | **tuning:** `gpsHdgMax` default 0.3→1.5 deg/loop (GPS EMA noise was blocking auto-zero on straight road); `beta` 0.05→0.15 (AZ-PRECIS 3× faster, ~15s for 5° correction); EEPROM ident bumped to `0xA204` |
 | `274ffa0` | **fix (C3+C5):** Keya `map()` range symmetrized to `[-255,255]→[-995,995]`; encoder jump guard rejects deltas > 5000 ticks (4.6× max physical speed) to prevent spikes from CAN noise |

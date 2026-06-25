@@ -1,5 +1,13 @@
 #define AOG_SKETCH_KEYA //FlorianT section control
 
+// Includes hoisted to top so arduino-cli forward-decl pass sees these types first
+#ifdef ARDUINO_TEENSY41
+#include <NativeEthernet.h>
+#include <NativeEthernetUdp.h>
+#endif
+#include <FlexCAN_T4.h>
+#include <EEPROM.h>
+
 #define VERSION 1.02
 //  0 = Claas (1E/30 Navagation Controller, 13/19 Steering Controller) - See Claas Notes on Service Tool Page
 //  1 = Valtra, Massey Fergerson (Standard Danfoss ISO 1C/28 Navagation Controller, 13/19 Steering Controller)
@@ -180,7 +188,6 @@ IPAddress Eth_ipDestination;
 #include <Wire.h>
 #include "BNO08x_AOG.h"
 
-#include <FlexCAN_T4.h>
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_256> K_Bus;    //Tractor / Control Bus
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_256> ISO_Bus;  //ISO Bus
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_256> Keya_Bus;

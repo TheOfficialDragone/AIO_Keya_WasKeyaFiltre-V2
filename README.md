@@ -50,7 +50,7 @@ On every 40 Hz loop iteration, the system checks four conditions simultaneously:
 |-----------|-----------|---------|--------|
 | Speed above minimum | `speedMin` | 2.5 km/h | GPS VTG |
 | BNO yaw rate below maximum | `yawRateMax` | 0.8 deg/s | BNO08x |
-| GPS heading variation below maximum | `gpsHdgMax` | 0.3 deg/loop | GPS VTG EMA |
+| GPS heading variation below maximum | `gpsHdgMax` | 1.5 deg/loop | GPS VTG EMA |
 | Cooldown elapsed since last zero | 2000 ms | hardcoded | internal |
 
 The GPS heading is filtered with an **EMA (Exponential Moving Average)** filter before the rate check, reducing GPS noise.
@@ -73,8 +73,10 @@ This prevents false zeros when the PID is fighting a small residual error near c
 The behavior differs based on whether guidance (autosteer) is currently active:
 
 **AZ-RAPIDE** (guidance OFF — e.g., headland turns, manual driving):
-- Direct jump: `keyaZeroTicks = meanTicks`
-- Fast realignment after U-turns
+- Direct jump: `keyaZeroTicks = meanTicks` — but **only if `|steerAngleActual| < 5°`**
+- If the wheel is turned (e.g., mid-capezzagna), the jump is skipped and the stable timer resets
+- No cooldown penalty on skipped jumps — retries immediately on next stable window
+- Fast realignment after U-turns once wheel is straight
 
 **AZ-PRECIS** (guidance ON — actively following a line):
 - Soft beta correction to avoid destabilizing active steering:
@@ -82,7 +84,8 @@ The behavior differs based on whether guidance (autosteer) is currently active:
   azCorrAccum += beta * steerAngleActual * keyaTicksPerDeg
   keyaZeroTicks += (int32_t)azCorrAccum   // only when accumulation reaches 1 full tick
   ```
-- `beta` default 0.05 = 5% of error corrected per stable window
+- `beta` default 0.15 = 15% of error corrected per stable window (~15s to correct 5° drift)
+- When guidance re-engages after a headland turn, cooldown is immediately reset so AZ-PRECIS starts without the 2s wait
 - Sub-tick accumulation ensures no correction is lost due to integer truncation
 
 The auto-zero is blocked until `wasZeroDone = true`. Until then, the watchdog is forced active so autosteer cannot engage without a valid zero reference.
@@ -169,14 +172,14 @@ Open a serial terminal at 115200 baud and type `z` + Enter to access the paramet
 |---|-----------|---------|-------------|
 | 1 | `speedMin` | 2.5 km/h | Minimum GPS speed to attempt auto-zero |
 | 2 | `yawRateMax` | 0.8 deg/s | Max BNO yaw rate — lower = stricter straight-line check |
-| 3 | `gpsHdgMax` | 0.3 deg/loop | Max GPS heading change per loop |
+| 3 | `gpsHdgMax` | 1.5 deg/loop | Max GPS heading change per loop (GPS EMA noise ~0.5 deg/sample) |
 | 4 | `timeSlowMs` | 500 ms | Stable window required at low speed |
 | 5 | `timeFastMs` | 200 ms | Stable window required at high speed |
 | 6 | `speedSlow` | 3.0 km/h | Below this speed: use `timeSlowMs` |
 | 7 | `speedFast` | 12.0 km/h | Above this speed: use `timeFastMs` |
 | 8 | `useBno` | 1 | 1 = use BNO yaw rate as stability condition |
 | 9 | `useGps` | 1 | 1 = use GPS heading variation as stability condition |
-| 10 | `beta` | 0.05 | Soft correction speed in AZ-PRECIS mode (0.01=slow … 0.2=fast) |
+| 10 | `beta` | 0.15 | Soft correction speed in AZ-PRECIS mode (0.01=slow … 0.2=fast) |
 | 11 | — | — | Reset all to defaults |
 
 > Also accessible via EMA commands `EY` (set BNO EMA alpha) and `ER` (reset EMA).
@@ -189,8 +192,9 @@ The firmware prints structured debug messages in real time:
 
 ```
 [AZ-RAPIDE] Debut periode stable (adapt=1.00)...
-[AZ-RAPIDE] stable 312/500ms spd=5.2 bno=OK yawR=0.12/0.80 gps=OK gpsR=0.05/0.30 adapt=1.00 angle=-0.08 enc=14523
+[AZ-RAPIDE] stable 312/500ms spd=5.2 bno=OK yawR=0.12/0.80 gps=OK gpsR=0.05/1.50 adapt=1.00 angle=-0.08 enc=14523
 [AZ-RAPIDE] Saut direct: -0.12deg zero: 14567 -> 14524
+[AZ-RAPIDE] SKIP: ruota 14.8deg > 5.0deg - non azzero         ← capezzagna guard
 [AZ-PRECIS] Recalage: angle=0.35 adapt=0.53 corr=1 zero: 14524 -> 14525
 [AZ] FORCE-ZERO eseguito: keyaZeroTicks=14523
 ```
@@ -210,20 +214,28 @@ Prefix legend: `[AZ-RAPIDE]` = guidance off, `[AZ-PRECIS]` = guidance active, `[
 | 70–73 | `aogConfig` (relay, tool lift) |
 | 80–83 | `wasOffsetF` (float — last valid WAS zero offset in degrees) |
 | 84–87 | `keyaTicksPerDeg` (float — mechanical calibration) |
-| 90–… | `AutoZeroParams` (all 10 auto-zero parameters + ident `0xA203`) |
+| 90–… | `AutoZeroParams` (all 10 auto-zero parameters + ident `0xA204`) |
 
 ---
 
 ## Changelog (Main Branch)
 
-### v1.02 — Current
+### v1.03 — Current
 
 | Commit | Change |
 |--------|--------|
-| `e6e410a` | **fix:** NTRIP buffer overflow guard — `Eth_NTRIP_packetBuffer[512]` bounded read, prevents heap corruption on large RTCM packets |
+| `c766671` | **fix (capezzagna):** AZ-RAPIDE now blocked if `\|steerAngleActual\| >= 5°` — eliminates false zero when wheel is turned during headland maneuvers; azCooldown only set when zero is actually applied; guidance re-engagement resets cooldown immediately for fast AZ-PRECIS restart |
+| `c766671` | **tuning:** `gpsHdgMax` default 0.3→1.5 deg/loop (GPS EMA noise was blocking auto-zero on straight road); `beta` 0.05→0.15 (AZ-PRECIS 3× faster, ~15s for 5° correction); EEPROM ident bumped to `0xA204` |
+| `274ffa0` | **fix (C3+C5):** Keya `map()` range symmetrized to `[-255,255]→[-995,995]`; encoder jump guard rejects deltas > 5000 ticks (4.6× max physical speed) to prevent spikes from CAN noise |
+| `e2b681e` | **fix (5 bugs):** TM171 CRC length corrected (`ImuData[2]+5` → `packetLength+5`); ADS1115 `getConversion()`/`isConversionDone()` I2C availability checks added; web config Content-Length capped at 4096; NTRIP buffer bounded read; force-zero detection on `wasOffset` change |
+
+### v1.02
+
+| Commit | Change |
+|--------|--------|
 | `511c7aa` | **feat:** Force-zero manual via WAS offset button — any `wasOffset` change in PGN 252 triggers immediate `keyaZeroTicks = keyaEncoderRaw`, no need to find a stable straight line |
-| `bcc223a` | **fix (8 bugs):** Yaw units corrected (BNO reported deg×10, now divided to deg/s before threshold comparison); EEPROM ident bumped to `0xA203` (forces param reload after yaw fix); EMA GPS heading alpha increased 0.1→0.3 for better responsiveness; ADS1115 failure no longer blocks autosteer in encoder mode; watchdog blocked until `wasZeroDone`; azCorrAccum sub-tick accumulation; steerSensorCounts mapped to keyaTicksPerDeg proportionally; yaw wraparound handled (±180° clamp) |
-| `bb427fd` | **fix:** EEPROM first-run ident mismatch prevented parameter persistence across reboots; `yawRateMax` default raised from 0.3 to 0.8 deg/s |
+| `bcc223a` | **fix (8 bugs):** Yaw units corrected (BNO reported deg×10, now divided to deg/s before threshold comparison); EEPROM ident bumped to `0xA203`; EMA GPS heading alpha increased 0.1→0.3; ADS1115 failure no longer blocks autosteer in encoder mode; watchdog blocked until `wasZeroDone`; azCorrAccum sub-tick accumulation; steerSensorCounts mapped to keyaTicksPerDeg proportionally; yaw wraparound handled (±180° clamp) |
+| `bb427fd` | **fix:** EEPROM first-run ident mismatch; `yawRateMax` default raised from 0.3 to 0.8 deg/s |
 
 ---
 

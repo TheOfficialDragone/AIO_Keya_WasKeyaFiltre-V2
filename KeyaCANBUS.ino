@@ -115,7 +115,7 @@ void enableKeyaSteer() {
 }
 
 void SteerKeya(int steerSpeed) {
-  int actualSpeed = map(steerSpeed, -255, 255, -995, 998);
+  int actualSpeed = map(steerSpeed, -255, 255, -995, 995);
   if (pwmDrive == 0) {
     disableKeyaSteer();
   }
@@ -172,6 +172,12 @@ void keyaUpdateEncoder(uint16_t rawTick)
 #if KEYA_ENCODER_INVERT
   delta = -delta;
 #endif
+  // Motor KY173DD01005 max 100 RPM, 10ms CAN → ~1092 ticks/msg max. Threshold 5000 = 4.6× max.
+  if (delta < -5000 || delta > 5000) {
+    Serial.printf("[KEYA] encoder jump skipped: delta=%d raw=%u prev=%u\n", delta, rawTick, keyaEncPrev);
+    keyaEncPrev = rawTick;
+    return;
+  }
   keyaEncoderRaw += delta;
   keyaEncPrev     = rawTick;
 }

@@ -633,14 +633,21 @@ void autosteerLoop()
 
           if (!wasZeroDone)
           {
-            keyaZeroTicks = meanTicks;
-            wasZeroDone   = true;
-            azCorrAccum   = 0.0f;
-            appliedZero   = true;
-            Serial.print(guidanceActive ? "[AZ-PRECIS] " : "[AZ-RAPIDE] ");
-            Serial.print("*** PREMIER ZERO ETABLI *** (");
-            Serial.print(azCount); Serial.print(" ech) zeroTicks=");
-            Serial.println(keyaZeroTicks);
+            // Fix: guard angolo sul primo zero — stesso threshold di AZ-RAPIDE
+            if (fabsf(steerAngleActual) < azRapideMaxDeg) {
+              keyaZeroTicks = meanTicks;
+              wasZeroDone   = true;
+              azCorrAccum   = 0.0f;
+              appliedZero   = true;
+              Serial.print(guidanceActive ? "[AZ-PRECIS] " : "[AZ-RAPIDE] ");
+              Serial.print("*** PREMIER ZERO ETABLI *** (");
+              Serial.print(azCount); Serial.print(" ech) zeroTicks=");
+              Serial.println(keyaZeroTicks);
+            } else {
+              Serial.printf("[AZ-INIT] SKIP primo zero: angolo %.1fdeg > %.1fdeg - attendo dritto\n",
+                            steerAngleActual, azRapideMaxDeg);
+              azAccum = 0; azCount = 0; stableStart = 0;
+            }
           }
           else if (!guidanceActive)
           {
@@ -663,7 +670,9 @@ void autosteerLoop()
           else
           {
             // MODE PRECIS : correction douce sub-tick
+            // Fix: non correggere se angolo > 10deg (curva reale, non errore residuo)
             float corrSign = steerConfig.InvertWAS ? -1.0f : 1.0f;
+            if (fabsf(steerAngleActual) < 10.0f)
             azCorrAccum += corrSign * azParams.beta * steerAngleActual * keyaTicksPerDeg;
             int32_t corrInt = (int32_t)azCorrAccum;
             if (corrInt != 0) {

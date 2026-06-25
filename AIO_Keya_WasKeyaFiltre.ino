@@ -8,7 +8,7 @@
 #include <FlexCAN_T4.h>
 #include <EEPROM.h>
 
-#define VERSION 1.02
+#define VERSION 1.03
 //  0 = Claas (1E/30 Navagation Controller, 13/19 Steering Controller) - See Claas Notes on Service Tool Page
 //  1 = Valtra, Massey Fergerson (Standard Danfoss ISO 1C/28 Navagation Controller, 13/19 Steering Controller)
 //  2 = CaseIH, New Holland (AA/170 Navagation Controller, 08/08 Steering Controller)

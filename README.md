@@ -183,7 +183,7 @@ Open a serial terminal at 115200 baud and type `z` + Enter to access the paramet
 | 10 | `beta` | 0.15 | Soft correction speed in AZ-PRECIS mode (0.01=slow … 0.2=fast) |
 | 11 | — | — | Reset all to defaults |
 
-> Also accessible via EMA commands `EY` (set BNO EMA alpha) and `ER` (reset EMA).
+> Also accessible via EMA commands: `EY<val>` (yaw alpha), `ER<val>` (roll alpha), `EP<val>` (pitch alpha), `ES<val>` (stop speed threshold km/h). Append `?` to any command to print current values.
 
 ---
 
@@ -195,7 +195,7 @@ The firmware prints structured debug messages in real time:
 [AZ-RAPIDE] Debut periode stable (adapt=1.00)...
 [AZ-RAPIDE] stable 312/500ms spd=5.2 bno=OK yawR=0.12/0.80 gps=OK gpsR=0.05/1.50 adapt=1.00 angle=-0.08 enc=14523
 [AZ-RAPIDE] Saut direct: -0.12deg zero: 14567 -> 14524
-[AZ-RAPIDE] SKIP: ruota 14.8deg > 10.0deg - non azzero        ← capezzagna guard (azRapideMaxDeg)
+[AZ-RAPIDE] SKIP: ruota 14.8deg > 5.0deg - non azzero         ← capezzagna guard (azRapideMaxDeg)
 [AZ-PRECIS] Recalage: angle=0.35 adapt=0.53 corr=1 zero: 14524 -> 14525
 [AZ] FORCE-ZERO eseguito: keyaZeroTicks=14523
 ```

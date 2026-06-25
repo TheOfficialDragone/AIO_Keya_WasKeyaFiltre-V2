@@ -560,6 +560,7 @@ void webConfigLoop()
 
     if (headersDone && isPost && contentLen > 0)
     {
+      if (contentLen > 4096) contentLen = 4096;
       while (client.available() && (int)body.length() < contentLen)
         body += (char)client.read();
       break;

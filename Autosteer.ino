@@ -889,9 +889,11 @@ void ReceiveUdp()
         // producendo un valore che cambia ad ogni pressione.
         // Rileviamo quel cambio come comando di force-zero manuale (override di emergenza).
         if (steerConfig.IsDanfoss) {
-          static int16_t prevWasOffset = -32768;  // sentinel: non ancora inizializzato
-          if (prevWasOffset == -32768) {
-            prevWasOffset = steerSettings.wasOffset;  // prima ricezione: init senza trigger
+          static bool    prevWasOffsetValid = false;
+          static int16_t prevWasOffset      = 0;
+          if (!prevWasOffsetValid) {
+            prevWasOffset      = steerSettings.wasOffset;
+            prevWasOffsetValid = true;
           } else if (steerSettings.wasOffset != prevWasOffset) {
             forceZeroNow  = true;
             prevWasOffset = steerSettings.wasOffset;

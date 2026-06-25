@@ -134,6 +134,7 @@ int16_t ADS1115_lite::getConversion() {  // Wait for the conversion to complete
   Wire1.endTransmission(); //Send the data
 
   Wire1.requestFrom(_i2cAddress, (uint8_t)2); //Request the 2 byte conversion register
+  if (Wire1.available() < 2) return 0;
   uint8_t hi = Wire1.read();
   uint8_t lo = Wire1.read();
   return (int16_t)((hi << 8) | lo);
@@ -151,6 +152,7 @@ bool ADS1115_lite::isConversionDone() {
   Wire1.endTransmission(); //Set the stop bit
 
   Wire1.requestFrom(_i2cAddress, (uint8_t)2); //Request 2 byte config register
+  if (Wire1.available() < 2) return false;
   uint8_t hi = Wire1.read();
   uint8_t lo = Wire1.read();
   return ((int16_t)((hi << 8) | lo)) >> 15;

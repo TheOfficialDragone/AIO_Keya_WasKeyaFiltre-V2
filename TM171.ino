@@ -158,8 +158,7 @@ void TM171process() {
     if (gotPacket)
     {
       gotPacket = false;
-//      if (GoodCRC(ImuData,packetLength+5))
-      if (GoodCRC(ImuData,ImuData[2]+5))
+      if (GoodCRC(ImuData,packetLength+5))
       {
         TM171lastData = 0;
         TM171DataSeen = true;

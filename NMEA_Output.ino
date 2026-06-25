@@ -443,7 +443,7 @@ void decimalToNMEA(double decimal_degrees, char* nmea_buf, char* ns_ew_buf, int 
         // %03d : 3 chiffres de degrés avec zéros de début (ex: 001) <--- CORRECTION CLÉ
         // %02d : 2 chiffres de minutes
         // %04d : 4 décimales
-        sprintf(nmea_buf, "%03d%02d.%07d", deg, min_int, min_frac);
+        sprintf(nmea_buf, "%03d%02d.%04d", deg, min_int, min_frac);
     }
 }
 

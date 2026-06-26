@@ -4,6 +4,12 @@
 This repository contains a specialized microcontroller firmware variant for **AgOpenGPS** running on a **Teensy 4.1**. 
 Its defining feature is the **elimination of the physical Wheel Angle Sensor (WAS)** on the tractor's front axle. Instead, the wheel angle is calculated mathematically in real-time utilizing **only the encoder data from the Keya steering motor** (Virtual WAS).
 
+* **Upstream / Base Project:** This project is evolved from and based on the following repository: https://github.com/lansalot/AIO_Keya_WasKeyaFiltre
+
+### 🔄 Upstream vs. Custom Version Comparison
+* **The "Virgin" Base Code:** The original code from the upstream repository contains structural algorithmic flaws regarding the Virtual WAS math (detailed in the "Field Issues" section below).
+* **Our Target Version:** Your primary objective is to optimize and rewrite specific parts of this logic to **completely resolve** these issues. Always treat the upstream logic as a reference to fix, not as a perfect baseline to replicate blindly.
+
 ### 💡 Core Guidelines
 * **Practical over Perfect:** Follow the official AgOpenGPS philosophy: *Practical working code > perfect architecture*. Priority is field-tested stability and getting it working in the mud.
 * **Safety First:** Always maintain hardware fail-safes. If communication with AgOpenGPS or the CAN/Serial motor bus drops, immediately disengage steering.

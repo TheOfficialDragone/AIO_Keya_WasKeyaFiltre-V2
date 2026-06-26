@@ -184,8 +184,11 @@ bool azMenuLoop()
         break;
     }
 
-    EEPROM.put(EEPROM_ADDR_AZ_PARAMS, azParams);
-    Serial.println("[AZ-MENU] Sauvegarde OK.");
+    // Only persist azParams for AZ cases (1-10); EKF cases (11-14) save via ekfSaveParams() above
+    if (azMenuChoice >= 1 && azMenuChoice <= 10) {
+      EEPROM.put(EEPROM_ADDR_AZ_PARAMS, azParams);
+      Serial.println("[AZ-MENU] Sauvegarde OK.");
+    }
     azMenuStep = 0;
     azMenuPrint();
   }

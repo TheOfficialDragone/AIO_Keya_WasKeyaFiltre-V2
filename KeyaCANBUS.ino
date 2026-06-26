@@ -196,7 +196,7 @@ void keyaUpdateEncoder(uint16_t rawTick)
       kRevAccum += delta;
       if (-kRevAccum >= (int32_t)KEYA_DIR_DEADBAND) {
         keyaEncoderRaw = kFreeze + kRevAccum; kRevAccum = 0; kState = 3;
-      } else if (delta > 0) { kRevAccum = 0; kState = 1; }
+      } else if (delta > 0) { keyaEncoderRaw = kFreeze; kRevAccum = 0; kState = 1; }
       break;
     case 3:  // moving left
       if (newDir == 1) { kFreeze = keyaEncoderRaw; kRevAccum = delta; kState = 4; }
@@ -206,7 +206,7 @@ void keyaUpdateEncoder(uint16_t rawTick)
       kRevAccum += delta;
       if (kRevAccum >= (int32_t)KEYA_DIR_DEADBAND) {
         keyaEncoderRaw = kFreeze + kRevAccum; kRevAccum = 0; kState = 1;
-      } else if (delta < 0) { kRevAccum = 0; kState = 3; }
+      } else if (delta < 0) { keyaEncoderRaw = kFreeze; kRevAccum = 0; kState = 3; }
       break;
   }
 }

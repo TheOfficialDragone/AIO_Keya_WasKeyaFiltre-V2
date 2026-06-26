@@ -7,15 +7,15 @@
 #include <math.h>
 
 // ----------------------------------------------------------------
-// EEPROM layout (starts at 126, after AutoZeroParams at 90+36=126)
+// EEPROM layout (starts at 130, after AutoZeroParams at 90+sizeof(AutoZeroParams)=130)
 // ----------------------------------------------------------------
-#define EEPROM_ADDR_EKF  126
+#define EEPROM_ADDR_EKF  130
 struct EKFParams {
   float  wheelBase;  // [m] — MEASURE ON REAL TRACTOR
   float  Rkin;       // measurement noise kinematic baseline (1.5°)² = 6.8e-4
   float  Qdelta;     // process noise wheel angle (1e-4)
   float  Vmin;       // min speed for Update B [m/s] (0.5)
-  uint16_t ident;    // magic = 0xEK01
+  uint16_t ident;    // magic = 0xEF01
 };
 
 // Tuning params (EEPROM-backed, modifiable via menu)
@@ -213,9 +213,8 @@ void ekfUpdateKinematic()
   float psiDotRad = ekfYawRate * (float)(M_PI / 180.0);
   float zKin = atan2f(psiDotRad * ekfWheelBase, speedMs) * (float)(180.0 / M_PI);
 
-  // Adaptive R: degrades quadratically at low speed
-  float R_kin = ekfRkin * (ekfVmin / speedMs) * (ekfVmin / speedMs);
-  if (R_kin < ekfRkin) R_kin = ekfRkin;
+  // Fixed measurement noise (adaptive scaling removed — formula was dead code)
+  float R_kin = ekfRkin;
 
   float innov = zKin - ekf_x[0];
   float S = ekf_P[0][0] + R_kin;

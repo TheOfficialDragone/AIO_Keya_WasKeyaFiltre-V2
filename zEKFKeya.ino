@@ -18,6 +18,7 @@ struct EKFParams {
   float  maxAngleDeg; // physical max steering angle [°], default 35.0
   uint16_t ident;     // magic = 0xEF02
 };
+static_assert(sizeof(EKFParams) == 24, "EKFParams size changed — update EEPROM_ADDR_EKF layout");
 
 // Tuning params (EEPROM-backed, modifiable via menu)
 float ekfWheelBase  = 2.8f;
@@ -274,8 +275,9 @@ void ekfTick()
   ekfPredict();
   ekfUpdateEncoder();
   ekfUpdateKinematic();
-  // NaN/Inf guard: full reset on filter divergence
-  if (isnan(ekf_x[0]) || isinf(ekf_x[0])) {
+  // NaN/Inf guard: full reset on filter divergence (any state or covariance)
+  if (isnan(ekf_x[0]) || isinf(ekf_x[0]) ||
+      isnan(ekf_x[1]) || isnan(ekf_x[2]) || isnan(ekf_P[0][0])) {
     ekfFullReset();
   } else {
     ekf_x[0] = constrain(ekf_x[0], -ekfMaxAngleDeg, ekfMaxAngleDeg);

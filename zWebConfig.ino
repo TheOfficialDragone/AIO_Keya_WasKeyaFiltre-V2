@@ -815,7 +815,7 @@ void webConfigLoop()
     sendPage(client);
   }
 
-  delay(1);
+  yield();
   client.stop();
 }
 

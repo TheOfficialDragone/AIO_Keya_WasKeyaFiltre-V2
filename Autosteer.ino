@@ -209,7 +209,6 @@ void steerSettingsInit()
 
 static_assert(sizeof(Storage)       == 16, "Storage size changed — bump EEP_Ident and update EEPROM map");
 static_assert(sizeof(AutoZeroParams) == 40, "AutoZeroParams size changed — update EEPROM_ADDR_AZ_PARAMS");
-static_assert(sizeof(EKFParams)      == 24, "EKFParams size changed — update EEPROM_ADDR_EKF layout");
 
 void autosteerSetup()
 {
@@ -526,19 +525,21 @@ void autosteerLoop()
       bool guidanceActive = (watchdogTimer < WATCHDOG_THRESHOLD);
 
       // --- Yaw rate BNO08x [deg/s] ---
+      // yaw is in tenths-of-degrees (0-3600); convert to degrees before delta/wrap
       float yawRate = 0.0f;
+      float yawDegNow = (float)yaw / 10.0f;
       if (!azYawInit) {
-        azLastYaw  = yaw;
+        azLastYaw  = yawDegNow;
         azLastTime = nowMs;
         azYawInit  = true;
       } else {
         float dt = (nowMs - azLastTime) / 1000.0f;
         if (dt < 0.001f) dt = 0.001f;
-        float dYaw = yaw - azLastYaw;
+        float dYaw = yawDegNow - azLastYaw;
         if (dYaw >  180.0f) dYaw -= 360.0f;
         if (dYaw < -180.0f) dYaw += 360.0f;
-        yawRate    = fabsf(dYaw) / dt;
-        azLastYaw  = yaw;
+        yawRate    = fabsf(dYaw) / dt;  // deg/s
+        azLastYaw  = yawDegNow;
         azLastTime = nowMs;
       }
 
@@ -575,7 +576,8 @@ void autosteerLoop()
       if      (gpsSpeed <= azParams.speedSlow) azTimeMsF = (float)azParams.timeSlowMs;
       else if (gpsSpeed >= azParams.speedFast) azTimeMsF = (float)azParams.timeFastMs;
       else {
-        float t = (gpsSpeed - azParams.speedSlow) / (azParams.speedFast - azParams.speedSlow);
+        float span = azParams.speedFast - azParams.speedSlow;
+        float t = (fabsf(span) < 0.01f) ? 0.0f : (gpsSpeed - azParams.speedSlow) / span;
         azTimeMsF = (float)azParams.timeSlowMs + t * ((float)azParams.timeFastMs - (float)azParams.timeSlowMs);
       }
       azTimeMsF = constrain(azTimeMsF, 200.0f, 5000.0f);
@@ -641,7 +643,7 @@ void autosteerLoop()
             // MODE RAPIDE : saut direct + EKF bias reset
             int32_t oldZero  = keyaZeroTicks;
             float   driftDeg = (fabsf(keyaTicksPerDeg) > 0.001f)
-                               ? (float)abs((int64_t)meanTicks - (int64_t)oldZero) / keyaTicksPerDeg
+                               ? (float)llabs((int64_t)meanTicks - (int64_t)oldZero) / keyaTicksPerDeg
                                : 0.0f;
             if (driftDeg > 5.0f) {
               // Reject: CPD wizard calibration would be corrupted by a >5° jump
@@ -650,7 +652,7 @@ void autosteerLoop()
             } else {
               keyaZeroTicks = meanTicks;
               azCorrAccum   = 0.0f;
-              ekfResetBias();          // EKF: absorb zero jump into b_enc
+              ekfFullReset();          // EKF: fresh start from verified zero anchor
               float deltaDeg = (float)(keyaZeroTicks - oldZero) / keyaTicksPerDeg;
               Serial.print("[AZ-RAPIDE] Saut direct: ");
               Serial.print(deltaDeg, 2); Serial.print("deg");
@@ -869,8 +871,8 @@ void ReceiveUdp()
 
 				steerSettings.minPWM = autoSteerUdpData[8]; //read the minimum amount of PWM for instant on
 
-				float temp = (float)steerSettings.minPWM * 1.2;
-				steerSettings.lowPWM = (byte)temp;
+				float temp = (float)steerSettings.minPWM * 1.2f;
+				steerSettings.lowPWM = (byte)constrain((int)temp, 0, 255);
 
 				steerSettings.steerSensorCounts = autoSteerUdpData[9]; //sent as setting displayed in AOG
 
@@ -893,7 +895,7 @@ void ReceiveUdp()
 				//crc
 				//autoSteerUdpData[13];
 
-				//store in EEPROM
+				//store in EEPROM (update skips write if value unchanged — protects Flash endurance)
 				EEPROM.put(10, steerSettings);
 
         // En mode Keya : si AOG envoie wasOffset = 0 -> reset zero encodeur
@@ -902,6 +904,7 @@ void ReceiveUdp()
           wasZeroDone   = true;
           stableStart   = 0;
           azCorrAccum   = 0.0f;
+          ekfFullReset();              // EKF: fresh start from AOG-forced zero
           Serial.print("[AZ] Zero force depuis AOG - zeroTicks=");
           Serial.println(keyaZeroTicks);
         }

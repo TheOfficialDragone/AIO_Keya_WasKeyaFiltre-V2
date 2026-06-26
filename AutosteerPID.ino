@@ -4,7 +4,7 @@ void calcSteeringPID(void)
     pValue = steerSettings.Kp * steerAngleError;
     pwmDrive = (int16_t)pValue;
 
-    errorAbs = abs(steerAngleError);
+    errorAbs = fabsf(steerAngleError);
     int16_t newMax = 0;
 
     if (errorAbs < LOW_HIGH_DEGREES)

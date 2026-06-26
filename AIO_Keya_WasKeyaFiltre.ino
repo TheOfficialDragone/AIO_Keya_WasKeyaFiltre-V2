@@ -74,14 +74,6 @@ struct Setup {
 static float    wasOffsetF   = 0.0f;
 static uint32_t stableStart  = 0;
 
-static const float    AUTOZERO_SPEED_MIN    = 4.0f;
-static const float    AUTOZERO_YAWRATE_MAX  = 0.5f;
-static const float    AUTOZERO_DELTA_MAX    = 20.0f;
-static const float    AUTOZERO_BETA         = 0.05f;
-static const float    AUTOZERO_SPEED_SLOW   = 3.0f;
-static const float    AUTOZERO_SPEED_FAST   = 12.0f;
-static const uint32_t AUTOZERO_TIME_SLOW_MS = 500;
-static const uint32_t AUTOZERO_TIME_FAST_MS = 200;
 #define EEPROM_ADDR_WAS_OFFSET_F  80
 
 // -----------------------------------------------------------------------

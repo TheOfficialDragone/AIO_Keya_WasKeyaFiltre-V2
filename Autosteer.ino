@@ -305,6 +305,7 @@ void autosteerSetup()
   // Charger les parametres auto-zero depuis EEPROM
   azMenuSetup();
   emaParamsLoad();
+  ekfSetup();          // EKF Virtual WAS
 
 }// End of Setup
 
@@ -434,14 +435,17 @@ void autosteerLoop()
     // =================================================================
     if (steerConfig.IsDanfoss)
     {
-      // --- MODE ENCODEUR KEYA ---
+      // --- MODE ENCODEUR KEYA + EKF ---
       int32_t deltaTicks = keyaEncoderRaw - keyaZeroTicks;
-      float rawAngle = (float)deltaTicks / keyaTicksPerDeg;
 
-      if (steerConfig.InvertWAS) rawAngle = -rawAngle;
+      // Run EKF (predict + update A + update B)
+      if (wasZeroDone) ekfTick();
 
-      steerAngleActual   = rawAngle;
-      helloSteerPosition = (int16_t)(rawAngle * 100.0f);
+      float ekfOut = EKFAngle;
+      if (steerConfig.InvertWAS) ekfOut = -ekfOut;
+
+      steerAngleActual   = ekfOut;
+      helloSteerPosition = (int16_t)(ekfOut * 100.0f);
       steeringPosition   = (int16_t)deltaTicks;
 
       // Bloquer l'autoguidage tant que le zero n'est pas etabli
@@ -607,6 +611,7 @@ void autosteerLoop()
             keyaZeroTicks = meanTicks;
             wasZeroDone   = true;
             azCorrAccum   = 0.0f;
+            ekfFullReset();          // EKF: fresh start after first zero
             Serial.print(guidanceActive ? "[AZ-PRECIS] " : "[AZ-RAPIDE] ");
             Serial.print("*** PREMIER ZERO ETABLI *** (");
             Serial.print(azCount); Serial.print(" ech) zeroTicks=");
@@ -614,10 +619,11 @@ void autosteerLoop()
           }
           else if (!guidanceActive)
           {
-            // MODE RAPIDE : saut direct a meanTicks
+            // MODE RAPIDE : saut direct + EKF bias reset
             int32_t oldZero = keyaZeroTicks;
             keyaZeroTicks   = meanTicks;
             azCorrAccum     = 0.0f;
+            ekfResetBias();          // EKF: absorb zero jump into b_enc
             float deltaDeg  = (float)(keyaZeroTicks - oldZero) / keyaTicksPerDeg;
             Serial.print("[AZ-RAPIDE] Saut direct: ");
             Serial.print(deltaDeg, 2); Serial.print("deg");
@@ -626,23 +632,9 @@ void autosteerLoop()
           }
           else
           {
-            // MODE PRECIS : correction douce sub-tick
-            float corrSign = steerConfig.InvertWAS ? -1.0f : 1.0f;
-            azCorrAccum += corrSign * azParams.beta * steerAngleActual * keyaTicksPerDeg;
-            int32_t corrInt = (int32_t)azCorrAccum;
-            if (corrInt != 0) {
-              int32_t oldZero = keyaZeroTicks;
-              keyaZeroTicks  += corrInt;
-              azCorrAccum    -= (float)corrInt;
-              Serial.print("[AZ-PRECIS] Recalage: angle="); Serial.print(steerAngleActual, 2);
-              Serial.print(" adapt="); Serial.print(adaptFactor, 2);
-              Serial.print(" corr=");  Serial.print(corrInt);
-              Serial.print(" zero: "); Serial.print(oldZero);
-              Serial.print(" -> ");    Serial.println(keyaZeroTicks);
-            } else {
-              Serial.print("[AZ-PRECIS] Recalage accumule: "); Serial.print(azCorrAccum, 3);
-              Serial.println(" (attend 1 tick entier)");
-            }
+            // MODE PRECIS : EKF bias reset (replaces sub-tick accumulation)
+            ekfResetBias();
+            azCorrAccum = 0.0f;
           }
 
           Serial.print("[AZ] zeroTicks="); Serial.print(keyaZeroTicks);

@@ -110,6 +110,19 @@ bool     wasZeroDone     = false;
 extern int32_t  keyaEncoderRaw;
 extern bool     keyaEncInitDone;
 
+// EKF Virtual WAS (zEKFKeya.ino)
+extern float EKFAngle;
+extern float ekfWheelBase;
+extern float ekfRkin;
+extern float ekfQdelta;
+extern float ekfVmin;
+void ekfSetup();
+void ekfTick();
+void ekfResetBias();
+void ekfFullReset();
+void ekfDebugPrint();
+void ekfSaveParams();
+
 // Variables declarees dans zHandlers.ino
 extern char vtgHeading[12];
 extern float emaGpsHdg;

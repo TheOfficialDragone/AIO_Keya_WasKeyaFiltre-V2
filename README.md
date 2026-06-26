@@ -64,11 +64,14 @@ z = atan(ψ_dot [rad/s] × L / v [m/s]) × (180/π)
 H = [1, 0, 0]
 R_kin = Rkin × (Vmin/v)²   ← adaptive: more trust at higher speed
 ```
-Mahalanobis gate χ²(1, 0.95) = 5.99 — hard reject on GNSS glitch.  
+Mahalanobis gate χ²(1, 0.95) = 5.99 — soft inflate (R×100) on GNSS glitch (hard reject kills observability).  
 `ψ_dot` from BNO085. `v` from `gpsSpeed` (km/h ÷ 3.6). Real-time `dt` from `millis()`.
 
 #### Layer 2 — GNSS auto-zero recalibration
-5-condition straight-line gate (speed, yaw rate, GPS heading variation, time window, dual-source agreement) triggers `ekfResetBias()` — moves current angle error into `b_enc` without full state reset.
+5-condition straight-line gate (speed < yawRateMax, GPS heading stable, VTG age < 3 s, cooldown) triggers recalibration:
+
+- **RAPIDE** (free driving, no AGO guidance): updates `keyaZeroTicks` then calls `ekfFullReset()` — fresh EKF start from verified anchor. Jump rejected if drift > 5° (protects CPD wizard calibration).
+- **PRECIS** (AGO guidance active): calls `ekfResetBias()` — moves current δ error into `b_enc` without touching `keyaZeroTicks`.
 
 ---
 
@@ -120,8 +123,15 @@ Button 2 disabled until step 1 done; button 3 disabled until step 2 done.
 | 80–83 | 4 B | wasOffsetF |
 | 84–87 | 4 B | keyaTicksPerDeg |
 | 90–129 | 40 B | AutoZeroParams (ident `0xA202`) |
-| **130–153** | **22 B** | **EKFParams (ident `0xEF02`)** |
+| **130–153** | **24 B** | **EKFParams (ident `0xEF02`) — 5×float+uint16+2B padding** |
+| 154–159 | 6 B | FREE |
 | **160–163** | **4 B** | **keyaZeroTicks (wizard calibration)** |
+| 164–167 | 4 B | EMA_YAW |
+| 168–171 | 4 B | EMA_ROLL |
+| 172–175 | 4 B | EMA_PITCH |
+| 176–179 | 4 B | EMA_STOP |
+| 180–199 | 20 B | FREE |
+| 200–223 | 24 B | SectionControl pin[24] |
 
 ---
 

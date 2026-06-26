@@ -672,8 +672,9 @@ void autosteerLoop()
             // MODE PRECIS : correction douce sub-tick
             // Fix: non correggere se angolo > 10deg (curva reale, non errore residuo)
             float corrSign = steerConfig.InvertWAS ? -1.0f : 1.0f;
-            if (fabsf(steerAngleActual) < 10.0f)
-            azCorrAccum += corrSign * azParams.beta * steerAngleActual * keyaTicksPerDeg;
+            if (fabsf(steerAngleActual) < 10.0f) {
+              azCorrAccum += corrSign * azParams.beta * steerAngleActual * keyaTicksPerDeg;
+            }
             int32_t corrInt = (int32_t)azCorrAccum;
             if (corrInt != 0) {
               int32_t oldZero = keyaZeroTicks;

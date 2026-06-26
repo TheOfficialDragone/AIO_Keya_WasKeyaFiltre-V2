@@ -61,8 +61,13 @@ void azMenuPrint()
   Serial.print("8. Source BNO         : "); Serial.println(azParams.useBno ? "ACTIF" : "INACTIF");
   Serial.print("9. Source GPS         : "); Serial.println(azParams.useGps ? "ACTIF" : "INACTIF");
   Serial.print("10. Beta correction   : "); Serial.print(azParams.beta,        3); Serial.println("  (0.01=lent .. 0.2=rapide)");
-  Serial.println("11. Reset valeurs defaut");
-  Serial.println("12. Quitter");
+  Serial.println("--- EKF params ---");
+  Serial.print("11. Wheelbase (m)     : "); Serial.print(ekfWheelBase, 2); Serial.println(" m  (MEASURE ON TRACTOR)");
+  Serial.print("12. Rkin (meas.noise) : "); Serial.print(ekfRkin, 6);      Serial.println("  (1.5deg)^2 = 6.8e-4");
+  Serial.print("13. Qdelta (proc.noise): "); Serial.print(ekfQdelta, 6);   Serial.println("  default 1e-4");
+  Serial.print("14. Vmin (m/s)        : "); Serial.print(ekfVmin, 2);      Serial.println(" m/s min speed for kinematic update");
+  Serial.println("15. Reset valeurs defaut");
+  Serial.println("16. Quitter");
   Serial.println("==================================");
   Serial.println("Taper numero + ENTREE :");
 }
@@ -108,7 +113,7 @@ bool azMenuLoop()
     // Lecture du choix
     azMenuChoice = input.toInt();
 
-    if (azMenuChoice == 11) {
+    if (azMenuChoice == 15) {
       // Reset defaut
       azParams = { 1.0f, 0.8f, 1.0f, 500, 200, 3.0f, 12.0f, 1, 1, 0.05f, 0xA202 };
       EEPROM.put(EEPROM_ADDR_AZ_PARAMS, azParams);
@@ -117,14 +122,14 @@ bool azMenuLoop()
       return true;
     }
 
-    if (azMenuChoice == 12) {
+    if (azMenuChoice == 16) {
       Serial.println("[AZ-MENU] Menu ferme. Taper 'z' pour rouvrir.");
       azMenuActive = false;
       azMenuStep   = 0;
       return false;
     }
 
-    if (azMenuChoice >= 1 && azMenuChoice <= 10) {
+    if (azMenuChoice >= 1 && azMenuChoice <= 14) {
       if (azMenuChoice == 8 || azMenuChoice == 9) {
         Serial.print("Nouvelle valeur (0=inactif, 1=actif) pour parametre ");
       } else {
@@ -156,6 +161,26 @@ bool azMenuLoop()
       case 10:
         if (val >= 0.001f && val <= 1.0f) azParams.beta = val;
         else Serial.println("Beta hors plage (0.001 - 1.0), ignore.");
+        break;
+      case 11:
+        ekfWheelBase = val;
+        ekfSaveParams();
+        Serial.print("[EKF] wheelBase="); Serial.println(ekfWheelBase, 2);
+        break;
+      case 12:
+        ekfRkin = val;
+        ekfSaveParams();
+        Serial.print("[EKF] Rkin="); Serial.println(ekfRkin, 6);
+        break;
+      case 13:
+        ekfQdelta = val;
+        ekfSaveParams();
+        Serial.print("[EKF] Qdelta="); Serial.println(ekfQdelta, 6);
+        break;
+      case 14:
+        ekfVmin = val;
+        ekfSaveParams();
+        Serial.print("[EKF] Vmin="); Serial.println(ekfVmin, 2);
         break;
     }
 

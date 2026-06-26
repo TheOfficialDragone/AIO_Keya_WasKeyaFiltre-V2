@@ -145,7 +145,7 @@ Open serial monitor at **115200 baud**. Type `z` + Enter. Type `c` + Enter for l
 |---|---|---|
 | 1 | Speed min | 2.5 km/h |
 | 2 | Yaw rate max (BNO) | 0.3 °/s |
-| 3 | GPS heading variation max | 0.3 ° |
+| 3 | GPS heading variation max | 0.3 °/cycle (≈12 °/s) |
 | 4 | Duration slow speed | 500 ms |
 | 5 | Duration fast speed | 200 ms |
 | 6 | Slow speed threshold | 3.0 km/h |

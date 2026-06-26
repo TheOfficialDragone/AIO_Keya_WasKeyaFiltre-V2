@@ -99,6 +99,7 @@ static const uint32_t AUTOZERO_TIME_FAST_MS = 200;
 // -----------------------------------------------------------------------
 #define KEYA_TICKS_PER_DEG_DEFAULT  24.0f     // 4 tours x 360 ticks/tour / 60deg = 24 ticks/deg
 #define KEYA_STEER_RANGE_DEG        30.0f
+#define KEYA_DIR_DEADBAND           30        // ticks to confirm direction change (~1.25° at 24 t/deg)
 #define EEPROM_ADDR_KEYA_TICKS      84
 
 float    keyaTicksPerDeg = KEYA_TICKS_PER_DEG_DEFAULT;

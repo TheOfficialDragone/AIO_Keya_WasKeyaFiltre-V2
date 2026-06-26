@@ -168,12 +168,47 @@ void keyaUpdateEncoder(uint16_t rawTick)
     keyaEncInitDone = true;
     return;
   }
+
   int16_t delta = (int16_t)(rawTick - keyaEncPrev);
 #if KEYA_ENCODER_INVERT
   delta = -delta;
 #endif
-  keyaEncoderRaw += delta;
-  keyaEncPrev     = rawTick;
+  keyaEncPrev = rawTick;
+  if (delta == 0) return;
+
+  // 5-state direction machine: absorbs mechanical backlash
+  static int32_t kFreeze   = 0;
+  static int32_t kRevAccum = 0;
+  static uint8_t kState    = 0;   // 0=init 1=right 2=db_to_left 3=left 4=db_to_right
+
+  int8_t newDir = (delta > 0) ? 1 : -1;
+
+  switch (kState) {
+    case 0:
+      keyaEncoderRaw += delta;
+      kState = (newDir == 1) ? 1 : 3;
+      break;
+    case 1:  // moving right
+      if (newDir == -1) { kFreeze = keyaEncoderRaw; kRevAccum = delta; kState = 2; }
+      else              { keyaEncoderRaw += delta; }
+      break;
+    case 2:  // deadband toward left
+      kRevAccum += delta;
+      if (-kRevAccum >= (int32_t)KEYA_DIR_DEADBAND) {
+        keyaEncoderRaw = kFreeze + kRevAccum; kRevAccum = 0; kState = 3;
+      } else if (delta > 0) { kRevAccum = 0; kState = 1; }
+      break;
+    case 3:  // moving left
+      if (newDir == 1) { kFreeze = keyaEncoderRaw; kRevAccum = delta; kState = 4; }
+      else             { keyaEncoderRaw += delta; }
+      break;
+    case 4:  // deadband toward right
+      kRevAccum += delta;
+      if (kRevAccum >= (int32_t)KEYA_DIR_DEADBAND) {
+        keyaEncoderRaw = kFreeze + kRevAccum; kRevAccum = 0; kState = 1;
+      } else if (delta < 0) { kRevAccum = 0; kState = 3; }
+      break;
+  }
 }
 
 void KeyaBus_Receive()

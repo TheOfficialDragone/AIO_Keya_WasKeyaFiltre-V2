@@ -30,7 +30,7 @@ The conversion ratio `keyaTicksPerDeg` maps encoder counts to steering degrees:
 steerAngleActual = (keyaEncoderRaw - keyaZeroTicks) / keyaTicksPerDeg
 ```
 
-Default: **24 ticks/degree** (4 motor turns × 360 ticks/turn ÷ 60° lock-to-lock). This value is calibrated on the field via the web interface and saved to EEPROM. Calibration procedure: set to 1.0, steer to a known real angle, read displayed value → `keyaTicksPerDeg = displayed / real_degrees`.
+Default: **24 ticks/degree** (4 motor turns × 360 ticks/turn ÷ 60° lock-to-lock). This value is calibrated via the web interface and saved to EEPROM. The **Keya Motor** tab on the web page includes a calibration wizard: set CPD = 100 in AOG, establish zero, steer to a known angle (e.g. 20°) measured with a protractor, enter the AOG-displayed angle into the wizard → it computes and pre-fills the correct `keyaTicksPerDeg` value automatically.
 
 ### The Zero Problem — Auto-Zero
 
@@ -233,6 +233,9 @@ Prefix legend: `[AZ-RAPIDE]` = guidance off, `[AZ-PRECIS]` = guidance active, `[
 
 | Commit | Change |
 |--------|--------|
+| `5fa802e` | **feat (web UI):** Config page split into two tabs — **Auto-Zero** (all AZ/EMA params) and **Keya Motor** (calibration wizard + ticks/deg field). Wizard guides CPD=100 → zero → steer 20° → compute `keyaTicksPerDeg` automatically |
+| `e32897a` | **feat (web UI):** `keyaEncoderRaw` (ticks) and `keyaTicksPerDeg` added to real-time status bar — visible live during calibration |
+| `98a38ba` | **style:** Added braces to AZ-PRECIS 10° guard — no behavior change, prevents silent logic break on future edits |
 | `93019bf` | **fix (false zero — first anchor):** First `wasZeroDone` blocked when `\|steerAngleActual\| >= azRapideMaxDeg` (5°) — prevents false anchor point if wheels are not straight at startup; stable timer resets on skip |
 | `93019bf` | **fix (false zero — AZ-PRECIS):** Soft beta correction skipped when `\|steerAngleActual\| >= 10°` — distinguishes real turn curves from residual drift; prevents zero drift accumulation while guidance is active during headland turns |
 | `c766671` | **fix (capezzagna):** AZ-RAPIDE now blocked if `\|steerAngleActual\| >= 5°` — eliminates false zero when wheel is turned during headland maneuvers; azCooldown only set when zero is actually applied; guidance re-engagement resets cooldown immediately for fast AZ-PRECIS restart |

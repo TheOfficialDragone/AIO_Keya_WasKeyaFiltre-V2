@@ -11,18 +11,20 @@
 // ----------------------------------------------------------------
 #define EEPROM_ADDR_EKF  130
 struct EKFParams {
-  float  wheelBase;  // [m] — MEASURE ON REAL TRACTOR
-  float  Rkin;       // measurement noise kinematic baseline (1.5°)² = 6.8e-4
-  float  Qdelta;     // process noise wheel angle (1e-4)
-  float  Vmin;       // min speed for Update B [m/s] (0.5)
-  uint16_t ident;    // magic = 0xEF01
+  float  wheelBase;   // [m] — MEASURE ON REAL TRACTOR
+  float  Rkin;        // measurement noise kinematic baseline (1.5°)² = 6.8e-4
+  float  Qdelta;      // process noise wheel angle (1e-4)
+  float  Vmin;        // min speed for Update B [m/s] (0.5)
+  float  maxAngleDeg; // physical max steering angle [°], default 35.0
+  uint16_t ident;     // magic = 0xEF02
 };
 
 // Tuning params (EEPROM-backed, modifiable via menu)
-float ekfWheelBase = 2.8f;
-float ekfRkin      = 6.8e-4f;
-float ekfQdelta    = 1e-4f;
-float ekfVmin      = 0.5f;
+float ekfWheelBase  = 2.8f;
+float ekfRkin       = 6.8e-4f;
+float ekfQdelta     = 1e-4f;
+float ekfVmin       = 0.5f;
+float ekfMaxAngleDeg = 35.0f;
 
 // ----------------------------------------------------------------
 // EKF state
@@ -58,16 +60,18 @@ void ekfSetup()
 {
   EKFParams p;
   EEPROM.get(EEPROM_ADDR_EKF, p);
-  if (p.ident == 0xEF01 &&
+  if (p.ident == 0xEF02 &&
       p.wheelBase >= 1.0f && p.wheelBase <= 6.0f &&
       p.Rkin     >  0.0f &&
       p.Qdelta   >  0.0f &&
-      p.Vmin     >= 0.1f && p.Vmin <= 3.0f)
+      p.Vmin     >= 0.1f && p.Vmin <= 3.0f &&
+      p.maxAngleDeg >= 5.0f && p.maxAngleDeg <= 90.0f)
   {
-    ekfWheelBase = p.wheelBase;
-    ekfRkin      = p.Rkin;
-    ekfQdelta    = p.Qdelta;
-    ekfVmin      = p.Vmin;
+    ekfWheelBase  = p.wheelBase;
+    ekfRkin       = p.Rkin;
+    ekfQdelta     = p.Qdelta;
+    ekfVmin       = p.Vmin;
+    ekfMaxAngleDeg = p.maxAngleDeg;
     Serial.println("[EKF] Params loaded from EEPROM.");
   } else {
     ekfSaveParams();
@@ -76,12 +80,13 @@ void ekfSetup()
   Serial.print("[EKF] wheelBase="); Serial.print(ekfWheelBase, 2);
   Serial.print(" Rkin=");           Serial.print(ekfRkin, 6);
   Serial.print(" Qdelta=");         Serial.print(ekfQdelta, 6);
-  Serial.print(" Vmin=");           Serial.println(ekfVmin, 2);
+  Serial.print(" Vmin=");           Serial.print(ekfVmin, 2);
+  Serial.print(" maxAngleDeg=");    Serial.println(ekfMaxAngleDeg, 2);
 }
 
 void ekfSaveParams()
 {
-  EKFParams p = { ekfWheelBase, ekfRkin, ekfQdelta, ekfVmin, 0xEF01 };
+  EKFParams p = { ekfWheelBase, ekfRkin, ekfQdelta, ekfVmin, ekfMaxAngleDeg, 0xEF02 };
   EEPROM.put(EEPROM_ADDR_EKF, p);
 }
 
@@ -135,7 +140,11 @@ void ekfPredict()
   (void)dAngle;  // suppress unused-variable warning
   ekfEncPrev = encNow;
 
-  static const float dt = 0.025f;  // 40 Hz nominal
+  // Real-time dt from wall clock (Teensy: constrain, not constrainf)
+  static uint32_t ekfPredT = 0;
+  uint32_t predNow = millis();
+  float dt = (ekfPredT > 0) ? constrain((predNow - ekfPredT) * 0.001f, 0.005f, 0.1f) : 0.025f;
+  ekfPredT = predNow;
 
   // State propagation: velocity model only — encoder enters via ekfUpdateEncoder()
   ekf_x[0] += ekf_x[1] * dt;
@@ -202,6 +211,8 @@ static void ekfUpdateEncoder()
 // EKF Update B — kinematic inverse measurement
 // H = [1, 0, 0]   (only delta observed)
 // Call every loop; gated internally on speed
+// Adaptive R: noise scales with (Vmin/v)² — more trust at higher speed.
+// Mahalanobis gate hard-rejects kinematic outliers (GNSS glitch, bad speed).
 // ----------------------------------------------------------------
 void ekfUpdateKinematic()
 {
@@ -213,12 +224,16 @@ void ekfUpdateKinematic()
   float psiDotRad = ekfYawRate * (float)(M_PI / 180.0);
   float zKin = atan2f(psiDotRad * ekfWheelBase, speedMs) * (float)(180.0 / M_PI);
 
-  // Fixed measurement noise (adaptive scaling removed — formula was dead code)
-  float R_kin = ekfRkin;
+  // Adaptive R: lower noise (more trust) at higher speed — (Vmin/v)² scaling
+  // At v=Vmin: R=ekfRkin; at v=2*Vmin: R=ekfRkin/4
+  float R_kin = ekfRkin * (ekfVmin / speedMs) * (ekfVmin / speedMs);
 
   float innov = zKin - ekf_x[0];
   float S = ekf_P[0][0] + R_kin;
   if (S < 1e-12f) return;
+
+  // Mahalanobis gate — hard reject kinematic outliers (GNSS glitch, wrong speed)
+  if ((innov * innov) / S > EKF_MAHA) return;
 
   // Gain K = P[:,0] / S
   float K[3];

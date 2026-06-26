@@ -286,6 +286,18 @@ void autosteerSetup()
     Serial.print("Keya ticks/deg : ");
     Serial.println(keyaTicksPerDeg, 1);
   }
+
+  // Restaurer le centre encodeur (calibration butee-a-butee CPD)
+  // Le zero est tout de meme re-etabli par l'auto-zero (wasZeroDone=false),
+  // mais cette valeur fournit un centre coherent avant le premier auto-zero.
+  {
+    int32_t savedZero = 0;
+    EEPROM.get(EEPROM_ADDR_KEYA_ZERO, savedZero);
+    if (savedZero != 0 && savedZero != -1)   // -1/0 = EEPROM vierge
+      keyaZeroTicks = savedZero;
+    Serial.print("Keya zeroTicks (CPD) : ");
+    Serial.println(keyaZeroTicks);
+  }
   wasZeroDone = false; // le zero doit etre etabli a chaque demarrage
   
 	if (Autosteer_running)

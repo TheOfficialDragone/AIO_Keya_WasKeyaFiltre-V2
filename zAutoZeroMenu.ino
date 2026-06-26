@@ -66,8 +66,10 @@ void azMenuPrint()
   Serial.print("12. Rkin (meas.noise) : "); Serial.print(ekfRkin, 6);      Serial.println("  (1.5deg)^2 = 6.8e-4");
   Serial.print("13. Qdelta (proc.noise): "); Serial.print(ekfQdelta, 6);   Serial.println("  default 1e-4");
   Serial.print("14. Vmin (m/s)        : "); Serial.print(ekfVmin, 2);      Serial.println(" m/s min speed for kinematic update");
-  Serial.println("15. Reset valeurs defaut");
-  Serial.println("16. Quitter");
+  Serial.print("17. Max angle (deg)   : "); Serial.print(ekfMaxAngleDeg, 2); Serial.println(" deg  (physical lock-to-lock half-range)");
+  Serial.println("18. Reset valeurs defaut");
+  Serial.println("19. Quitter");
+  Serial.println("--- Taper 'c' pour assistant calibration butee-a-butee (CPD) ---");
   Serial.println("==================================");
   Serial.println("Taper numero + ENTREE :");
 }
@@ -80,8 +82,46 @@ static bool    azMenuActive  = false;
 static uint8_t azMenuStep    = 0;  // 0=attente choix, 1=attente valeur
 static uint8_t azMenuChoice  = 0;
 
+// Lock-to-lock CPD calibration wizard state (AGCO US8583312 pattern)
+static bool    calWizActive = false;
+static uint8_t calWizStep   = 0;
+static int32_t calLeftTicks = 0;
+
 bool azMenuLoop()
 {
+  // -----------------------------------------------------------------
+  // Assistant calibration butee-a-butee (CPD) — actif meme hors menu
+  // -----------------------------------------------------------------
+  if (calWizActive && Serial.available()) {
+    String calInput = Serial.readStringUntil('\n');
+    calInput.trim();
+    if (calWizStep == 1) {
+      calLeftTicks = keyaEncoderRaw;
+      calWizStep   = 2;
+      Serial.print("[CAL] LEFT  recorded: "); Serial.println(calLeftTicks);
+      Serial.println("[CAL] Now steer FULL RIGHT to mechanical stop, then press Enter.");
+    } else if (calWizStep == 2) {
+      int32_t calRightTicks = keyaEncoderRaw;
+      Serial.print("[CAL] RIGHT recorded: "); Serial.println(calRightTicks);
+      int32_t newZero    = (calLeftTicks + calRightTicks) / 2;
+      float   totalTicks = fabsf((float)(calRightTicks - calLeftTicks));
+      float   newCPD     = totalTicks / (2.0f * ekfMaxAngleDeg);
+      // Apply
+      keyaZeroTicks   = newZero;
+      keyaTicksPerDeg = newCPD;
+      // Persist
+      EEPROM.put(EEPROM_ADDR_KEYA_TICKS, keyaTicksPerDeg);
+      EEPROM.put(EEPROM_ADDR_KEYA_ZERO,  keyaZeroTicks);
+      ekfFullReset();
+      Serial.print("[CAL] New center (zeroTicks): "); Serial.println(newZero);
+      Serial.print("[CAL] New ticksPerDeg: ");        Serial.println(newCPD, 2);
+      Serial.println("[CAL] EKF reset. Drive straight to verify.");
+      calWizActive = false;
+      calWizStep   = 0;
+    }
+    return calWizActive;
+  }
+
   // Detection touche 'z' hors menu
  if (!azMenuActive) {
     if (Serial.available()) {
@@ -90,7 +130,15 @@ bool azMenuLoop()
         
         // Commandes filtres EMA BNO (EY / ER)
         if (handleEmaSerialCommand(input)) return false;
-        
+
+        // Lancement assistant calibration butee-a-butee (CPD)
+        if (input == "c" || input == "C") {
+            calWizActive = true;
+            calWizStep   = 1;
+            Serial.println("[CAL] Lock-to-lock wizard. Steer FULL LEFT to mechanical stop, then press Enter.");
+            return false;
+        }
+
         // Activation menu auto-zero
         if (input == "z" || input == "Z") {
             azMenuActive = true;
@@ -113,7 +161,7 @@ bool azMenuLoop()
     // Lecture du choix
     azMenuChoice = input.toInt();
 
-    if (azMenuChoice == 15) {
+    if (azMenuChoice == 18) {
       // Reset defaut
       azParams = { 1.0f, 0.8f, 1.0f, 500, 200, 3.0f, 12.0f, 1, 1, 0.05f, 0xA202 };
       EEPROM.put(EEPROM_ADDR_AZ_PARAMS, azParams);
@@ -122,14 +170,14 @@ bool azMenuLoop()
       return true;
     }
 
-    if (azMenuChoice == 16) {
+    if (azMenuChoice == 19) {
       Serial.println("[AZ-MENU] Menu ferme. Taper 'z' pour rouvrir.");
       azMenuActive = false;
       azMenuStep   = 0;
       return false;
     }
 
-    if (azMenuChoice >= 1 && azMenuChoice <= 14) {
+    if ((azMenuChoice >= 1 && azMenuChoice <= 14) || azMenuChoice == 17) {
       if (azMenuChoice == 8 || azMenuChoice == 9) {
         Serial.print("Nouvelle valeur (0=inactif, 1=actif) pour parametre ");
       } else {
@@ -181,6 +229,15 @@ bool azMenuLoop()
         ekfVmin = val;
         ekfSaveParams();
         Serial.print("[EKF] Vmin="); Serial.println(ekfVmin, 2);
+        break;
+      case 17:
+        if (val >= 5.0f && val <= 90.0f) {
+          ekfMaxAngleDeg = val;
+          ekfSaveParams();
+          Serial.print("[EKF] maxAngleDeg="); Serial.println(ekfMaxAngleDeg, 2);
+        } else {
+          Serial.println("Max angle hors plage (5 - 90), ignore.");
+        }
         break;
     }
 

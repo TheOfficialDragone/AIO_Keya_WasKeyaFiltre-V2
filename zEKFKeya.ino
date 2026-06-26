@@ -128,14 +128,17 @@ void ekfPredict()
     return;
   }
 
-  // Angle increment from encoder ticks
+  if (fabsf(keyaTicksPerDeg) < 0.001f) return;
+
+  // Angle increment from encoder ticks (tracked for ekfEncPrev only; NOT injected into state here)
   float dAngle = (float)(encNow - ekfEncPrev) / keyaTicksPerDeg;
+  (void)dAngle;  // suppress unused-variable warning
   ekfEncPrev = encNow;
 
   static const float dt = 0.025f;  // 40 Hz nominal
 
-  // State propagation: x[0] += x[1]*dt + dAngle, x[1] and x[2] random walk
-  ekf_x[0] += ekf_x[1] * dt + dAngle;
+  // State propagation: velocity model only — encoder enters via ekfUpdateEncoder()
+  ekf_x[0] += ekf_x[1] * dt;
 
   // Covariance: P = F*P*F' + Q  with F = [[1,dt,0],[0,1,0],[0,0,1]]
   // Compute F*P row by row
@@ -164,6 +167,7 @@ void ekfPredict()
 // ----------------------------------------------------------------
 static void ekfUpdateEncoder()
 {
+  if (fabsf(keyaTicksPerDeg) < 0.001f) return;
   float zEnc = (float)(keyaEncoderRaw - keyaZeroTicks) / keyaTicksPerDeg;
 
   // Innovation
@@ -257,7 +261,6 @@ void ekfResetBias()
   ekf_x[1]  = 0.0f;
   // P left intact — converges naturally
   EKFAngle  = 0.0f;
-  Serial.print("[EKF] Bias reset: b_enc="); Serial.println(ekf_x[2], 3);
 }
 
 // ----------------------------------------------------------------
@@ -272,7 +275,6 @@ void ekfFullReset()
   ekfEncInit = false;
   ekfYawInit = false;
   EKFAngle   = 0.0f;
-  Serial.println("[EKF] Full reset.");
 }
 
 // ----------------------------------------------------------------

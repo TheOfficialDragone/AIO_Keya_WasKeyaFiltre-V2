@@ -304,3 +304,15 @@ void ekfDebugPrint()
   Serial.print(" v=");          Serial.print(gpsSpeed/3.6f, 2);
   Serial.print(" P00=");        Serial.println(ekf_P[0][0], 6);
 }
+
+// ----------------------------------------------------------------
+// State accessor — lets web/UI read static EKF internals
+//   angle -> ekf_x[0] (delta), bias -> ekf_x[2] (b_enc), p00 -> ekf_P[0][0]
+// Any pointer may be null.
+// ----------------------------------------------------------------
+void ekfGetState(float* angle, float* bias, float* p00)
+{
+  if (angle) *angle = ekf_x[0];
+  if (bias)  *bias  = ekf_x[2];
+  if (p00)   *p00   = ekf_P[0][0];
+}

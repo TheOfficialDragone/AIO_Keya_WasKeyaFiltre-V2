@@ -13,6 +13,11 @@
 
 EthernetServer webServer(80);
 
+// Lock-to-lock web calibration wizard state
+static uint8_t  webCalStep  = 0;   // 0=idle 1=left_done 2=both_done
+static int32_t  webCalLeft  = 0;
+static int32_t  webCalRight = 0;
+
 // Required external variables
 extern byte           Eth_myip[4];
 extern float          steerAngleActual;
@@ -30,6 +35,16 @@ extern float          emaYawAlpha;
 extern float          emaRollAlpha;
 extern float          emaPitchAlpha;
 extern float          emaStopKmh;
+
+// EKF Virtual WAS (defined in zEKFKeya.ino)
+extern float EKFAngle;
+extern float ekfWheelBase, ekfRkin, ekfQdelta, ekfVmin, ekfMaxAngleDeg;
+extern void  ekfSaveParams();
+extern void  ekfFullReset();
+extern void  ekfGetState(float* angle, float* bias, float* p00);
+
+// EEPROM addresses for Keya zero / ticks (defined in AIO_Keya_WasKeyaFiltre.ino)
+// EEPROM_ADDR_KEYA_TICKS = 84, EEPROM_ADDR_KEYA_ZERO = 160
 
 #define EEPROM_ADDR_EMA_YAW   150
 #define EEPROM_ADDR_EMA_ROLL  154
@@ -155,6 +170,23 @@ static void handlePost(const String& body)
   }
 }
 
+  // EKF params
+  {
+    float v;
+    v = extractFloat(body, "ekf_wb", ekfWheelBase);
+    if (v >= 1.0f && v <= 6.0f)      { ekfWheelBase   = v; }
+    v = extractFloat(body, "ekf_rk", ekfRkin);
+    if (v > 0.0f && v < 1.0f)        { ekfRkin        = v; }
+    v = extractFloat(body, "ekf_qd", ekfQdelta);
+    if (v > 0.0f && v < 1.0f)        { ekfQdelta      = v; }
+    v = extractFloat(body, "ekf_vm", ekfVmin);
+    if (v >= 0.1f && v <= 3.0f)      { ekfVmin        = v; }
+    v = extractFloat(body, "ekf_ma", ekfMaxAngleDeg);
+    if (v >= 5.0f && v <= 90.0f)     { ekfMaxAngleDeg = v; }
+    // Save all EKF params in one call
+    ekfSaveParams();
+  }
+
   Serial.print("[WEB] Saved useBno="); Serial.print(azParams.useBno);
   Serial.print(" useGps=");            Serial.print(azParams.useGps);
   Serial.print(" beta=");              Serial.println(azParams.beta, 3);
@@ -249,6 +281,31 @@ static void sendPage(EthernetClient& c)
   c.println(".emaval{font-size:.9em;font-weight:bold;color:#a0a0f0;min-width:36px;text-align:right}");
   c.println(".emabadge{font-size:.7em;padding:2px 7px;border-radius:10px;margin-left:4px}");
   c.println(".off{background:#333;color:#777}.on{background:#2a2a6a;color:#a0a0f0}");
+  // Tab styles
+  c.println(".tabs{display:flex;gap:6px;margin:0 0 16px}");
+  c.println(".tab{flex:1;padding:10px;background:#0f3460;color:#aaa;border:none;border-radius:6px;font-size:.92em;cursor:pointer;transition:.2s;margin-top:0}");
+  c.println(".tab:hover{background:#16213e}");
+  c.println(".tab.act{background:#e94560;color:#fff;font-weight:bold}");
+  c.println(".tabp{display:none}.tabp.act{display:block}");
+  // EKF status / calibration widget styles
+  c.println(".ekfblock{background:#2a1030;border:1px solid #6a2a7a;border-radius:8px;padding:12px 14px;margin-bottom:14px}");
+  c.println(".ekftitle{font-size:.82em;color:#d98ae0;font-weight:bold;margin-bottom:10px;letter-spacing:.04em}");
+  c.println(".ekfgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}");
+  c.println(".ekfcard{background:#1e0d26;border-radius:6px;padding:8px 10px}");
+  c.println(".ekflbl{display:block;font-size:.72em;color:#a06ab0;margin-bottom:3px;white-space:nowrap}");
+  c.println(".ekfval{display:block;font-size:1.55em;font-weight:bold;color:#eee;line-height:1.1}");
+  c.println(".ekfval.big{font-size:2em;color:#d98ae0}");
+  c.println(".ekfwarn{color:#f0a030!important}");
+  c.println(".calbox{background:#1a2a1a;border:1px solid #2a6a2a;border-radius:8px;padding:14px;margin-bottom:14px}");
+  c.println(".caltit{font-size:.85em;color:#4ecb8d;font-weight:bold;margin-bottom:6px}");
+  c.println(".caldsc{font-size:.75em;color:#6a9a6a;margin-bottom:12px;line-height:1.6}");
+  c.println(".calbtn{width:100%;padding:9px;border-radius:6px;font-size:.92em;cursor:pointer;margin:8px 0 4px}");
+  c.println(".calb1{background:#1a3a4a;color:#7bd0e0;border:1px solid #2a6a8a}");
+  c.println(".calb2{background:#1a4a1a;color:#4ecb8d;border:1px solid #2a7a2a}");
+  c.println(".calbtn:disabled{opacity:.4;cursor:not-allowed}");
+  c.println(".calout{font-size:.82em;line-height:1.7;padding:6px 0;color:#bbb}");
+  c.println(".badge{font-size:.72em;padding:3px 9px;border-radius:10px;font-weight:bold}");
+  c.println(".bg-idle{background:#333;color:#999}.bg-s1{background:#5a4a10;color:#f0d060}.bg-s2{background:#103a1a;color:#4ecb8d}");
   c.println("</style></head><body>");
 
   // ---- TITLE ----
@@ -262,6 +319,13 @@ static void sendPage(EthernetClient& c)
   c.print("Zero established: ");
   if (wasZeroDone) c.print("<span class='ok'>&#10003; YES</span>");
   else             c.print("<span class='nok'>&#10007; NO</span>");
+  {
+    float bias = 0.0f, p00 = 0.0f;
+    ekfGetState(nullptr, &bias, &p00);
+    c.print("<br>&#127919; EKF angle: <b>"); c.print(EKFAngle, 2); c.print(" deg</b> &nbsp; ");
+    c.print("&#127312; Bias b_enc: <b>"); c.print(bias, 3); c.print(" deg</b> &nbsp; ");
+    c.print("P00: <b>"); c.print(p00, 5); c.println("</b>");
+  }
   c.println("</div>");
 
   // ---- AUTO-ZERO TRACKING BLOCK ----
@@ -309,6 +373,18 @@ static void sendPage(EthernetClient& c)
   }
 
   c.println("<form method='POST' action='/save'>");
+
+  // ---- TAB BUTTONS ----
+  c.println("<div class='tabs'>");
+  c.println("<button type='button' class='tab act' onclick='st(\"t-az\",this)'>&#9881; Auto-Zero</button>");
+  c.println("<button type='button' class='tab' onclick='st(\"t-ky\",this)'>&#128295; Keya Motor</button>");
+  c.println("<button type='button' class='tab' onclick='st(\"t-ef\",this)'>&#127312; EKF Fusion</button>");
+  c.println("</div>");
+
+  // ================================================================
+  // TAB 1: AUTO-ZERO
+  // ================================================================
+  c.println("<div id='t-az' class='tabp act'>");
 
   // ================================================================
   // SECTION 1: HEADING SOURCES
@@ -417,19 +493,6 @@ static void sendPage(EthernetClient& c)
     "Above this: short duration is applied. Recommended: <b>10 - 15 km/h</b>.");
 
   // ================================================================
-  // SECTION 4: KEYA CALIBRATION
-  // ================================================================
-  c.println("<h2>&#128295; Keya encoder calibration</h2>");
-
-  rowNum(c,
-    "Ticks per wheel steering degree",
-    "keyaTicks", keyaTicksPerDeg, 1, "t/deg",
-    "Mechanical ratio: encoder ticks per wheel steering degree. "
-    "<b>Default 24.0</b> = 4 motor turns for 60 deg lock-to-lock. "
-    "If AOG angle is too large: increase. Too small: decrease. "
-    "Formula: (motor_turns x 65535) / total_angle_deg.");
-
-  // ================================================================
   // SECTION 5: BNO EMA FILTERS
   // ================================================================
   c.println("<h2>&#127919; BNO08x anti-jitter EMA filters</h2>");
@@ -491,6 +554,129 @@ static void sendPage(EthernetClient& c)
       "<b>0.0</b> = permanent filtering, even when stopped.");
   c.println("</div>");
 
+  c.println("</div>"); // end tab t-az
+
+  // ================================================================
+  // TAB 2: KEYA MOTOR
+  // ================================================================
+  c.println("<div id='t-ky' class='tabp'>");
+
+  c.println("<h2>&#128295; Keya encoder calibration</h2>");
+  rowNum(c,
+    "Ticks per wheel steering degree",
+    "keyaTicks", keyaTicksPerDeg, 1, "t/deg",
+    "Mechanical ratio: encoder ticks per wheel steering degree. "
+    "<b>Default 24.0</b> = 4 motor turns for 60 deg lock-to-lock. "
+    "If AOG angle is too large: increase. Too small: decrease. "
+    "Use the lock-to-lock wizard in the EKF Fusion tab to compute this automatically.");
+
+  c.println("</div>"); // end tab t-ky
+
+  // ================================================================
+  // TAB 3: EKF FUSION
+  // ================================================================
+  c.println("<div id='t-ef' class='tabp'>");
+
+  // ---- EKF live status block ----
+  {
+    float bias = 0.0f, p00 = 0.0f;
+    ekfGetState(nullptr, &bias, &p00);
+    c.print("<div class='ekfblock'>");
+    c.println("<div class='ekftitle'>&#127919; EKF Virtual WAS - live state</div>");
+    c.println("<div class='ekfgrid'>");
+    c.print("<div class='ekfcard'><span class='ekflbl'>EKF wheel angle</span>");
+    c.print("<span class='ekfval big'>"); c.print(EKFAngle, 2); c.println(" deg</span></div>");
+    c.print("<div class='ekfcard'><span class='ekflbl'>Encoder bias b_enc</span>");
+    c.print("<span class='ekfval"); if (fabsf(bias) > 5.0f) c.print(" ekfwarn");
+    c.print("'>"); c.print(bias, 3); c.println(" deg</span></div>");
+    c.print("<div class='ekfcard'><span class='ekflbl'>WAS sensor angle</span>");
+    c.print("<span class='ekfval'>"); c.print(steerAngleActual, 2); c.println(" deg</span></div>");
+    c.print("<div class='ekfcard'><span class='ekflbl'>Covariance P00</span>");
+    c.print("<span class='ekfval"); if (p00 > 0.5f) c.print(" ekfwarn");
+    c.print("'>"); c.print(p00, 5); c.println("</span></div>");
+    c.println("</div></div>"); // end ekfgrid, ekfblock
+  }
+
+  // ---- EKF parameters ----
+  c.println("<h2>&#9881; EKF Parameters</h2>");
+  c.print("<div class='desc' style='color:#888;margin-bottom:9px'>");
+  c.print("3-state EKF (delta, delta_dot, b_enc) fusing the Keya encoder with a bicycle-model ");
+  c.print("kinematic estimate. All values are saved to EEPROM with the button below.");
+  c.println("</div>");
+
+  rowNum(c, "Wheel base", "ekf_wb", ekfWheelBase, 2, "m",
+    "Measured wheelbase of your tractor front-to-rear axle. "
+    "<b>MUST be measured on the real tractor.</b> "
+    "Affects bicycle model accuracy directly. Range 1.0-6.0.");
+
+  rowNum(c, "Kinematic noise Rkin", "ekf_rk", ekfRkin, 6, "",
+    "(1.5&deg;)&sup2; = 6.8e-4. Kinematic measurement noise. "
+    "Increase if bicycle model fights encoder (rough terrain, slopes). "
+    "Decrease for more IMU influence at speed.");
+
+  rowNum(c, "Process noise Qdelta", "ekf_qd", ekfQdelta, 6, "",
+    "Process noise for wheel angle. "
+    "Increase to follow encoder more aggressively. Default <b>1e-4</b>.");
+
+  rowNum(c, "Min speed Vmin", "ekf_vm", ekfVmin, 2, "m/s",
+    "Minimum speed for bicycle model update (Update B). "
+    "Below this speed IMU yaw rate is unreliable. Default <b>0.5 m/s</b>. Range 0.1-3.0.");
+
+  rowNum(c, "Max steering angle", "ekf_ma", ekfMaxAngleDeg, 1, "deg",
+    "Physical maximum steering angle at full lock (half lock-to-lock range). "
+    "Used by the calibration wizard. Typical <b>30-45&deg;</b>. Range 5-90.");
+
+  // ---- Lock-to-lock calibration wizard ----
+  c.println("<h2>&#127919; Lock-to-lock calibration</h2>");
+  c.println("<div class='calbox'>");
+  c.println("<div class='caltit'>Automatic keyaZeroTicks + keyaTicksPerDeg</div>");
+  c.print("<div class='caldsc'>");
+  c.print("Computes the encoder center and ticks/deg from the two physical lock positions, ");
+  c.print("using <b>Max steering angle</b> above as the half-range.<br>");
+  c.print("1) Turn the wheel <b>fully LEFT</b> (full lock), then press <b>Step 1</b>.<br>");
+  c.print("2) Turn the wheel <b>fully RIGHT</b> (full lock), then press <b>Step 2</b>.<br>");
+  c.print("3) Press <b>Step 3</b> to compute, save to EEPROM and reset the EKF.");
+  c.println("</div>");
+
+  // Wizard live state
+  {
+    c.print("<div style='margin-bottom:8px'>Wizard state: ");
+    if (webCalStep == 0)      c.print("<span class='badge bg-idle'>IDLE</span>");
+    else if (webCalStep == 1) c.print("<span class='badge bg-s1'>LEFT recorded</span>");
+    else                      c.print("<span class='badge bg-s2'>BOTH recorded</span>");
+    c.println("</div>");
+  }
+
+  c.print("<button type='submit' class='calbtn calb1' formaction='/calleft'>&#9664; Step 1 - record LEFT lock (now: ");
+  c.print(keyaEncoderRaw); c.println(")</button>");
+  c.print("<button type='submit' class='calbtn calb1' formaction='/calright'");
+  if (webCalStep < 1) c.print(" disabled");
+  c.print(">&#9654; Step 2 - record RIGHT lock (now: ");
+  c.print(keyaEncoderRaw); c.println(")</button>");
+  c.print("<button type='submit' class='calbtn calb2' formaction='/caldone'");
+  if (webCalStep != 2) c.print(" disabled");
+  c.println(">&#10003; Step 3 - compute &amp; save</button>");
+
+  // Recorded / computed values
+  c.print("<div class='calout'>");
+  c.print("Recorded LEFT: <b>");
+  if (webCalStep >= 1) c.print(webCalLeft); else c.print("-");
+  c.print("</b> &nbsp; Recorded RIGHT: <b>");
+  if (webCalStep >= 2) c.print(webCalRight); else c.print("-");
+  c.print("</b>");
+  if (webCalStep == 2) {
+    int32_t cCenter  = (webCalLeft + webCalRight) / 2;
+    float   cTotal   = fabsf((float)(webCalRight - webCalLeft));
+    float   cCpd     = (ekfMaxAngleDeg > 0.0f) ? cTotal / (2.0f * ekfMaxAngleDeg) : 0.0f;
+    c.print("<br>&rarr; Computed center: <b>"); c.print(cCenter);
+    c.print("</b> ticks &nbsp; Computed CPD: <b>"); c.print(cCpd, 2);
+    c.print("</b> t/deg");
+  }
+  c.println("</div>");
+  c.println("</div>"); // end calbox
+
+  c.println("</div>"); // end tab t-ef
+
   // ================================================================
   // BUTTON
   // ================================================================
@@ -502,6 +688,13 @@ static void sendPage(EthernetClient& c)
   // SCRIPT
   // ================================================================
   c.println("<script>");
+  // Tab switching
+  c.println("function st(id,btn){");
+  c.println("  document.querySelectorAll('.tabp').forEach(t=>t.classList.remove('act'));");
+  c.println("  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('act'));");
+  c.println("  document.getElementById(id).classList.add('act');");
+  c.println("  btn.classList.add('act');");
+  c.println("}");
   c.println("var rt,dirty=false;");
   c.println("function go(){if(!dirty)rt=setTimeout(()=>{if(!dirty)location.reload();},5000);}");
   c.println("document.querySelectorAll('input').forEach(el=>{");
@@ -566,10 +759,38 @@ void webConfigLoop()
     }
   }
 
-  if (isPost && body.length() > 0) {
+  // ---- Route dispatch ----
+  if (requestLine.startsWith("POST /calleft")) {
+    webCalLeft = keyaEncoderRaw;
+    webCalStep = 1;
+    sendRedirect(client);
+  }
+  else if (requestLine.startsWith("POST /calright") && webCalStep >= 1) {
+    webCalRight = keyaEncoderRaw;
+    webCalStep  = 2;
+    sendRedirect(client);
+  }
+  else if (requestLine.startsWith("POST /caldone") && webCalStep == 2) {
+    int32_t newZero  = (webCalLeft + webCalRight) / 2;
+    float totalTicks = fabsf((float)(webCalRight - webCalLeft));
+    float newCPD     = (ekfMaxAngleDeg > 0.0f) ? totalTicks / (2.0f * ekfMaxAngleDeg) : 0.0f;
+    if (newCPD > 1.0f && newCPD < 500.0f) {
+      keyaZeroTicks   = newZero;
+      keyaTicksPerDeg = newCPD;
+      EEPROM.put(EEPROM_ADDR_KEYA_TICKS, keyaTicksPerDeg);
+      EEPROM.put(EEPROM_ADDR_KEYA_ZERO,  keyaZeroTicks);
+      ekfFullReset();
+      Serial.print("[WEB] Lock-to-lock: zero="); Serial.print(keyaZeroTicks);
+      Serial.print(" CPD=");                      Serial.println(keyaTicksPerDeg, 2);
+    }
+    webCalStep = 0;
+    sendRedirect(client);
+  }
+  else if (isPost && body.length() > 0) {
     handlePost(body);
     sendRedirect(client);
-  } else {
+  }
+  else {
     sendPage(client);
   }
 

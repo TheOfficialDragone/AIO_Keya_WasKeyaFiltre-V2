@@ -127,6 +127,7 @@ void ekfResetBias();
 void ekfFullReset();
 void ekfDebugPrint();
 void ekfSaveParams();
+void ekfGetState(float* angle, float* bias, float* p00);
 
 // Variables declarees dans zHandlers.ino
 extern char vtgHeading[12];

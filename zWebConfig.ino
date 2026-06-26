@@ -295,6 +295,8 @@ static void sendPage(EthernetClient& c)
   c.print("Zero established: ");
   if (wasZeroDone) c.print("<span class='ok'>&#10003; YES</span>");
   else             c.print("<span class='nok'>&#10007; NO</span>");
+  c.print("<br>&#128190; Encoder raw: <b>"); c.print(keyaEncoderRaw); c.print(" ticks</b> &nbsp; ");
+  c.print("&#128295; Ticks/deg: <b>"); c.print(keyaTicksPerDeg, 1); c.println(" t/deg</b>");
   c.println("</div>");
 
   // ---- AUTO-ZERO TRACKING BLOCK ----

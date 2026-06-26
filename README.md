@@ -79,6 +79,8 @@ Mahalanobis gate χ²(1, 0.95) = 5.99 — soft inflate (R×100) on GNSS glitch (
 
 Access via browser at `http://<Teensy_IP>`. **Primary configuration method.**
 
+> **Note:** Web server rejects new connections during active guidance (watchdog active) to protect the steer loop from TCP blocking. Browser will reconnect automatically once steering stops.
+
 ### Tab 1 — Auto-Zero
 BNO/GPS source toggles, beta, stability conditions, speed thresholds, advanced AZ params, BNO EMA filters.
 

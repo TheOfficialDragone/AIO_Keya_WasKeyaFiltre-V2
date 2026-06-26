@@ -732,6 +732,12 @@ void webConfigLoop()
   EthernetClient client = webServer.available();
   if (!client) return;
 
+  // Refuse new connections during active steering — prevents 400ms TCP block from stalling steer loop
+  if (watchdogTimer < WATCHDOG_THRESHOLD) {
+    client.stop();
+    return;
+  }
+
   uint32_t t = millis();
   String   requestLine = "";
   String   body        = "";

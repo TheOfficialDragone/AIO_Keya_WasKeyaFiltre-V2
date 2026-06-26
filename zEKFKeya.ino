@@ -198,6 +198,7 @@ static void ekfUpdateEncoder()
 
   // State update
   for (int i = 0; i < 3; i++) ekf_x[i] += K[i] * innov;
+  ekf_x[2] = constrain(ekf_x[2], -ekfMaxAngleDeg, ekfMaxAngleDeg);
 
   // Covariance: P = P - K*(H*P)  where H*P = P[0] + P[2]
   float HP[3];
@@ -205,6 +206,10 @@ static void ekfUpdateEncoder()
   for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
       ekf_P[i][j] -= K[i] * HP[j];
+  // Symmetrize to prevent non-PD drift
+  for (int i = 0; i < 3; i++)
+    for (int j = i + 1; j < 3; j++)
+      ekf_P[i][j] = ekf_P[j][i] = 0.5f * (ekf_P[i][j] + ekf_P[j][i]);
 }
 
 // ----------------------------------------------------------------
@@ -232,8 +237,13 @@ void ekfUpdateKinematic()
   float S = ekf_P[0][0] + R_kin;
   if (S < 1e-12f) return;
 
-  // Mahalanobis gate — hard reject kinematic outliers (GNSS glitch, wrong speed)
-  if ((innov * innov) / S > EKF_MAHA) return;
+  // Mahalanobis gate — soft reject: inflate R on outliers (keeps observability)
+  // Hard reject would lock out the only update that separates δ from b_enc
+  if ((innov * innov) / S > EKF_MAHA) {
+    R_kin = ekfRkin * 100.0f;   // degrade trust, but still update
+    S = ekf_P[0][0] + R_kin;
+    if (S < 1e-12f) return;
+  }
 
   // Gain K = P[:,0] / S
   float K[3];
@@ -241,6 +251,7 @@ void ekfUpdateKinematic()
 
   // State update
   for (int i = 0; i < 3; i++) ekf_x[i] += K[i] * innov;
+  ekf_x[2] = constrain(ekf_x[2], -ekfMaxAngleDeg, ekfMaxAngleDeg);
 
   // Covariance: P = P - K*(H*P) where H*P = P[0]
   float HP[3];
@@ -248,8 +259,10 @@ void ekfUpdateKinematic()
   for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
       ekf_P[i][j] -= K[i] * HP[j];
-
-  EKFAngle = ekf_x[0];
+  // Symmetrize to prevent non-PD drift
+  for (int i = 0; i < 3; i++)
+    for (int j = i + 1; j < 3; j++)
+      ekf_P[i][j] = ekf_P[j][i] = 0.5f * (ekf_P[i][j] + ekf_P[j][i]);
 }
 
 // ----------------------------------------------------------------
@@ -261,6 +274,12 @@ void ekfTick()
   ekfPredict();
   ekfUpdateEncoder();
   ekfUpdateKinematic();
+  // NaN/Inf guard: full reset on filter divergence
+  if (isnan(ekf_x[0]) || isinf(ekf_x[0])) {
+    ekfFullReset();
+  } else {
+    ekf_x[0] = constrain(ekf_x[0], -ekfMaxAngleDeg, ekfMaxAngleDeg);
+  }
   EKFAngle = ekf_x[0];
 }
 
@@ -270,10 +289,20 @@ void ekfTick()
 // ----------------------------------------------------------------
 void ekfResetBias()
 {
+  // Update P for the state transform: new_b = old_b - old_delta
+  // P_new[2][2] = P[0][0] + P[2][2] - 2*P[0][2]  (propagate uncertainty)
+  float p22_new = ekf_P[0][0] + ekf_P[2][2] - 2.0f * ekf_P[0][2];
   ekf_x[2] -= ekf_x[0];
+  ekf_x[2]  = constrain(ekf_x[2], -ekfMaxAngleDeg, ekfMaxAngleDeg);
   ekf_x[0]  = 0.0f;
   ekf_x[1]  = 0.0f;
-  // P left intact — converges naturally
+  // Reset rows/cols 0,1 (now set to known constants); keep P[2][2] propagated
+  for (int i = 0; i < 3; i++)
+    for (int j = 0; j < 3; j++)
+      ekf_P[i][j] = 0.0f;
+  ekf_P[0][0] = 0.01f;    // confident: delta just set to 0
+  ekf_P[1][1] = 0.01f;    // confident: delta_dot just set to 0
+  ekf_P[2][2] = (p22_new > 0.001f) ? p22_new : 0.5f;
   EKFAngle  = 0.0f;
 }
 

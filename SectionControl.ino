@@ -156,9 +156,10 @@ extern Config aogConfig;
 // TABLEAUX DE MAPPAGE PIN/RELAIS
 // ============================================================================
 
-// Mappage AOG → fonction physique (reçu depuis AgOpenGPS, sauvé EEPROM addr 120)
+// Mappage AOG → fonction physique (reçu depuis AgOpenGPS, sauvé EEPROM addr 200)
 // index = position sortie configurable
 // valeur : 0=rien | 1-16=section | 17=HydUp | 18=HydDown | 19=TramR | 20=TramL | 21=GeoStop
+// NOTE: addr moved from 120 to 200 to avoid collision with EKFParams block (130-153)
 uint8_t pin[24] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 // États logiques calculés (indépendants du mode de sortie)
@@ -362,7 +363,7 @@ bool getAutoManual()
 //  SETUP
 void sectionControlSetup()
 {
-    EEPROM.get(120, pin);
+    EEPROM.get(200, pin);
 
     Serial.println("\r\n=== Section Control ===");
 
@@ -910,7 +911,7 @@ void sendManualAutoStatus()
 void updatePinMapping(uint8_t* udpData)
 {
     for (uint8_t i = 0; i < 24; i++) pin[i] = udpData[i + 5];
-    EEPROM.put(120, pin);
+    EEPROM.put(200, pin);
 }
 
 // ============================================================================

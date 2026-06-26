@@ -46,10 +46,12 @@ extern void  ekfGetState(float* angle, float* bias, float* p00);
 // EEPROM addresses for Keya zero / ticks (defined in AIO_Keya_WasKeyaFiltre.ino)
 // EEPROM_ADDR_KEYA_TICKS = 84, EEPROM_ADDR_KEYA_ZERO = 160
 
-#define EEPROM_ADDR_EMA_YAW   150
-#define EEPROM_ADDR_EMA_ROLL  154
-#define EEPROM_ADDR_EMA_PITCH 158
-#define EEPROM_ADDR_EMA_STOP  162
+// EMA addresses placed AFTER EKFParams(130-153) and KEYA_ZERO(160-163)
+// Previous addrs 150/154/158/162 overlapped EKFParams ident and KEYA_ZERO
+#define EEPROM_ADDR_EMA_YAW   164
+#define EEPROM_ADDR_EMA_ROLL  168
+#define EEPROM_ADDR_EMA_PITCH 172
+#define EEPROM_ADDR_EMA_STOP  176
 
 
 // Forward declaration (defined in zHandlers.ino)
@@ -110,6 +112,7 @@ static float extractFloat(const String& body, const char* key, float defVal)
   int end = body.indexOf('&', idx);
   String val = (end < 0) ? body.substring(idx) : body.substring(idx, end);
   val.trim();
+  if (val.length() == 0) return defVal;  // empty field → keep current value
   return val.toFloat();
 }
 
@@ -130,13 +133,23 @@ static void handlePost(const String& body)
   float b = extractFloat(body, "beta", azParams.beta);
   if (b >= 0.001f && b <= 1.0f) azParams.beta = b;
 
-  azParams.speedMin   = extractFloat(body, "speedMin",   azParams.speedMin);
-  azParams.yawRateMax = extractFloat(body, "yawRateMax", azParams.yawRateMax);
-  azParams.gpsHdgMax  = extractFloat(body, "gpsHdgMax",  azParams.gpsHdgMax);
-  azParams.timeSlowMs = extractUint (body, "timeSlowMs", azParams.timeSlowMs);
-  azParams.timeFastMs = extractUint (body, "timeFastMs", azParams.timeFastMs);
-  azParams.speedSlow  = extractFloat(body, "speedSlow",  azParams.speedSlow);
-  azParams.speedFast  = extractFloat(body, "speedFast",  azParams.speedFast);
+  {
+    float fv; uint32_t uv;
+    fv = extractFloat(body, "speedMin", azParams.speedMin);
+    if (fv >= 0.1f  && fv <= 30.0f)   azParams.speedMin   = fv;
+    fv = extractFloat(body, "yawRateMax", azParams.yawRateMax);
+    if (fv >= 0.01f && fv <= 30.0f)   azParams.yawRateMax = fv;
+    fv = extractFloat(body, "gpsHdgMax", azParams.gpsHdgMax);
+    if (fv >= 0.01f && fv <= 30.0f)   azParams.gpsHdgMax  = fv;
+    uv = extractUint(body, "timeSlowMs", azParams.timeSlowMs);
+    if (uv >= 50    && uv <= 10000)    azParams.timeSlowMs = uv;
+    uv = extractUint(body, "timeFastMs", azParams.timeFastMs);
+    if (uv >= 50    && uv <= 10000)    azParams.timeFastMs = uv;
+    fv = extractFloat(body, "speedSlow", azParams.speedSlow);
+    if (fv >= 0.1f  && fv <= 30.0f)   azParams.speedSlow  = fv;
+    fv = extractFloat(body, "speedFast", azParams.speedFast);
+    if (fv >= 0.1f  && fv <= 30.0f)   azParams.speedFast  = fv;
+  }
   EEPROM.put(EEPROM_ADDR_AZ_PARAMS, azParams);
 
   float ticks = extractFloat(body, "keyaTicks", keyaTicksPerDeg);
@@ -176,9 +189,9 @@ static void handlePost(const String& body)
     v = extractFloat(body, "ekf_wb", ekfWheelBase);
     if (v >= 1.0f && v <= 6.0f)      { ekfWheelBase   = v; }
     v = extractFloat(body, "ekf_rk", ekfRkin);
-    if (v > 0.0f && v < 1.0f)        { ekfRkin        = v; }
+    if (v > 1e-9f && v < 100.0f)     { ekfRkin        = v; }
     v = extractFloat(body, "ekf_qd", ekfQdelta);
-    if (v > 0.0f && v < 1.0f)        { ekfQdelta      = v; }
+    if (v > 1e-9f && v < 100.0f)     { ekfQdelta      = v; }
     v = extractFloat(body, "ekf_vm", ekfVmin);
     if (v >= 0.1f && v <= 3.0f)      { ekfVmin        = v; }
     v = extractFloat(body, "ekf_ma", ekfMaxAngleDeg);
@@ -729,7 +742,7 @@ void webConfigLoop()
 
   while (client.connected() && (millis() - t < 200))
   {
-    if (!client.available()) continue;
+    if (!client.available()) { yield(); continue; }
     char ch = client.read();
 
     if (ch == '\n')
@@ -738,7 +751,11 @@ void webConfigLoop()
       {
         if (requestLine.length() == 0) requestLine = line;
         if (line.startsWith("POST"))            isPost     = true;
-        if (line.startsWith("Content-Length:")) contentLen = line.substring(16).toInt();
+        if (line.startsWith("Content-Length:")) {
+          int ci = line.indexOf(':');
+          String cv = line.substring(ci + 1); cv.trim();
+          contentLen = cv.toInt();
+        }
         if (line.length() <= 1) {
           headersDone = true;
           if (!isPost) break;
@@ -753,8 +770,12 @@ void webConfigLoop()
 
     if (headersDone && isPost && contentLen > 0)
     {
-      while (client.available() && (int)body.length() < contentLen)
-        body += (char)client.read();
+      if (contentLen > 4096) contentLen = 4096;
+      body.reserve(contentLen);
+      while ((int)body.length() < contentLen && (millis() - t < 200)) {
+        if (client.available()) body += (char)client.read();
+        else yield();
+      }
       break;
     }
   }

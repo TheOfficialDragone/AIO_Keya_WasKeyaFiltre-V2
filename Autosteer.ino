@@ -246,7 +246,7 @@ void autosteerSetup()
 		EEPROM.put(10, steerSettings);
 		EEPROM.put(40, steerConfig);
 		EEPROM.put(60, networkAddress);
-    EEPROM.get(70, aogConfig);
+    EEPROM.put(70, aogConfig);
 	}
 	else
 	{
@@ -481,6 +481,7 @@ void autosteerLoop()
       steeringPosition = (steeringPosition >> 1);
       helloSteerPosition = steeringPosition - 6800;
 
+      if (steerSettings.steerSensorCounts == 0) steerSettings.steerSensorCounts = 1;
       if (steerConfig.InvertWAS)
       {
         steeringPosition = (steeringPosition - 6805 - steerSettings.wasOffset);
@@ -863,9 +864,9 @@ void ReceiveUdp()
         // Exemples : 50 -> 12 ticks/deg, 100 -> 24 ticks/deg, 200 -> 48 ticks/deg
         // Le zéro (offset) est géré séparément par keyaZeroTicks via l'auto-zero
         if (steerConfig.IsDanfoss) {
+          // Update RAM only — do NOT save to EEPROM: would overwrite wizard CPD calibration
           keyaTicksPerDeg = KEYA_TICKS_PER_DEG_DEFAULT * ((float)steerSettings.steerSensorCounts / 100.0f);
-          if (keyaTicksPerDeg < 1.0f) keyaTicksPerDeg = 1.0f; // garde-fou division par zero
-          EEPROM.put(EEPROM_ADDR_KEYA_TICKS, keyaTicksPerDeg);
+          if (keyaTicksPerDeg < 1.0f) keyaTicksPerDeg = 1.0f;
         }
 
 				steerSettings.wasOffset = (autoSteerUdpData[10]);  //read was zero offset Lo

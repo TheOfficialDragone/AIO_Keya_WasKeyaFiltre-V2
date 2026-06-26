@@ -32,6 +32,9 @@ AutoZeroParams azParams = {
 // -----------------------------------------------------------------
 void azMenuSetup()
 {
+  // Limit readStringUntil blocking — default 1000ms would stall 40Hz loop
+  Serial.setTimeout(50);
+
   AutoZeroParams saved;
   EEPROM.get(EEPROM_ADDR_AZ_PARAMS, saved);
   if (saved.ident == 0xA202) {

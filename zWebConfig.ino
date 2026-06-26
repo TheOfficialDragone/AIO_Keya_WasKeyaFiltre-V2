@@ -464,12 +464,12 @@ static void sendPage(EthernetClient& c)
     "Recommended: <b>0.5 - 1.0</b> deg/s.");
 
   rowNum(c,
-    "Max GPS heading variation",
+    "Max GPS heading variation (deg/cycle)",
     "gpsHdgMax", azParams.gpsHdgMax, 2, "deg",
-    "Allowed GPS heading difference between two cycles (25ms). "
-    "<b>Lower</b> = stricter. <b>Raise</b> = more permissive. "
-    "Inactive if GPS source is disabled. "
-    "Recommended: <b>0.5 - 1.0</b> deg.");
+    "Max heading delta between consecutive loop calls (25 ms). "
+    "<b>Not deg/s</b> — multiply by ~40 for deg/s equivalent. "
+    "Default 0.3 deg/cycle &asymp; 12 deg/s. "
+    "<b>Lower</b> = stricter. Inactive if GPS source disabled.");
 
   // ================================================================
   // SECTION 3: STABILITY DURATIONS

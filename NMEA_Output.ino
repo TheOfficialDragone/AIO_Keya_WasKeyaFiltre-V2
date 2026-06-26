@@ -31,7 +31,8 @@ uint32_t GPZDA_INTERVAL_MS = 1000;
 
 /************************* Menu Configuration *************************/
 bool menuActive = false;
-String inputBuffer = "";
+static char inputBuf[8] = {};
+static uint8_t inputBufLen = 0;
 
 void recalculateIntervals() {
     GPGGA_INTERVAL_MS = (uint32_t)(1000.0 / GPGGA_FREQUENCY_HZ);
@@ -260,9 +261,10 @@ void processMenu() {
         char c = Serial.read();
         
         if (c == '\n' || c == '\r') {
-            if (inputBuffer.length() > 0) {
-                int choice = inputBuffer.toInt();
-                inputBuffer = "";
+            if (inputBufLen > 0) {
+                inputBuf[inputBufLen] = '\0';
+                int choice = atoi(inputBuf);
+                inputBufLen = 0; inputBuf[0] = '\0';
                 
                 Serial.println();
                 
@@ -305,7 +307,7 @@ void processMenu() {
                 }
             }
         } else if (c >= '0' && c <= '9') {
-            inputBuffer += c;
+            if (inputBufLen < (uint8_t)(sizeof(inputBuf) - 1)) inputBuf[inputBufLen++] = c;
             Serial.print(c);
         }
     }

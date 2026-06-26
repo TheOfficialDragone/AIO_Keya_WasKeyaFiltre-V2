@@ -318,6 +318,10 @@ void autosteerSetup()
 	adc.setSampleRate(ADS1115_REG_CONFIG_DR_128SPS); //128 samples per second
 	adc.setGain(ADS1115_REG_CONFIG_PGA_6_144V);
 
+  // Reset AZ tracking flags so stale heading data from before soft-reboot is discarded
+  azYawInitF = false;
+  azGpsInitF = false;
+
   // Charger les parametres auto-zero depuis EEPROM
   azMenuSetup();
   emaParamsLoad();
@@ -326,6 +330,9 @@ void autosteerSetup()
 }// End of Setup
 
 float azCorrAccum = 0.0f; // accumulation sub-tick pour recalage progressif
+// AZ tracking init flags — file-scope so autosteerSetup() can reset on soft-reboot
+static bool azYawInitF   = false;
+static bool azGpsInitF   = false;
 
 void autosteerLoop()
 {
@@ -515,9 +522,9 @@ void autosteerLoop()
       static uint32_t azCount      = 0;
       static uint32_t dbgLastPrint = 0;
       static uint32_t azCooldown   = 0;
-      static bool     azYawInit    = false;
       static float    azLastGpsHdg = 0.0f;
-      static bool     azGpsInit    = false;
+      bool& azYawInit = azYawInitF;   // file-scope — reset by autosteerSetup on soft-reboot
+      bool& azGpsInit = azGpsInitF;
 
       uint32_t nowMs = millis();
 

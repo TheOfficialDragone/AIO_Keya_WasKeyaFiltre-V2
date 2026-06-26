@@ -385,7 +385,7 @@ void CalculateChecksum(void)
     char tmp;
 
     // The checksum calc starts after '$' and ends before '*'
-    for (inx = 1; inx < 200; inx++)
+    for (inx = 1; inx < (int16_t)sizeof(nmea); inx++)
     {
         tmp = nmea[inx];
 

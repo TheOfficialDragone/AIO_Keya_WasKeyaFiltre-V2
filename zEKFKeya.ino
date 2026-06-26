@@ -40,8 +40,11 @@ static bool    ekfYawInit = false;
 static float   ekfYawRate = 0.0f;   // signed, deg/s (+right / -left)
 
 // Encoder tracking
-static int32_t ekfEncPrev = 0;
-static bool    ekfEncInit = false;
+static int32_t  ekfEncPrev = 0;
+static bool     ekfEncInit = false;
+
+// Predict dt clock (file-scope so ekfFullReset can zero it)
+static uint32_t ekfPredT = 0;
 
 // Process noise
 #define EKF_Q0  ekfQdelta
@@ -142,7 +145,6 @@ void ekfPredict()
   ekfEncPrev = encNow;
 
   // Real-time dt from wall clock (Teensy: constrain, not constrainf)
-  static uint32_t ekfPredT = 0;
   uint32_t predNow = millis();
   float dt = (ekfPredT > 0) ? constrain((predNow - ekfPredT) * 0.001f, 0.005f, 0.1f) : 0.025f;
   ekfPredT = predNow;
@@ -319,6 +321,7 @@ void ekfFullReset()
       ekf_P[i][j] = (i == j) ? 1.0f : 0.0f;
   ekfEncInit = false;
   ekfYawInit = false;
+  ekfPredT   = 0;    // reset dt clock so first post-reset dt uses default 0.025s
   EKFAngle   = 0.0f;
 }
 

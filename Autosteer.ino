@@ -145,6 +145,7 @@ uint8_t KBUSRearHitch = 250;    //Variable for hitch height from KBUS (0-250 *0.
 uint8_t countHyd = 0; // Compteur pour le temps d'appui bouton Fendt
 
 uint32_t myTime;
+extern uint32_t lastVtgMs;  // defined in zHandlers.ino — used for GPS dropout detection in AZ
 uint32_t lastpush;
 uint32_t Time;
 uint32_t relayTime;
@@ -205,6 +206,10 @@ void steerSettingsInit()
 	highLowPerDeg = ((float)(steerSettings.highPWM - steerSettings.lowPWM)) / LOW_HIGH_DEGREES;
 }
 
+
+static_assert(sizeof(Storage)       == 16, "Storage size changed — bump EEP_Ident and update EEPROM map");
+static_assert(sizeof(AutoZeroParams) == 40, "AutoZeroParams size changed — update EEPROM_ADDR_AZ_PARAMS");
+static_assert(sizeof(EKFParams)      == 24, "EKFParams size changed — update EEPROM_ADDR_EKF layout");
 
 void autosteerSetup()
 {
@@ -579,7 +584,8 @@ void autosteerLoop()
       // --- Conditions (strictement identiques dans les deux modes) ---
       bool speedOk    = (gpsSpeed > azParams.speedMin);
       bool straightOk = (!azParams.useBno) || (yawRate < yawRateMax);
-      bool gpsCapOk   = (!azParams.useGps) || gpsOk;
+      bool gpsFresh   = (!azParams.useGps) || ((nowMs - lastVtgMs) < 3000);
+      bool gpsCapOk   = (!azParams.useGps) || (gpsOk && gpsFresh);
       bool cooldownOk = (nowMs - azCooldown > 2000);
 
       // --- DEBUG toutes les 5s si periode stable en cours ---
@@ -633,15 +639,24 @@ void autosteerLoop()
           else if (!guidanceActive)
           {
             // MODE RAPIDE : saut direct + EKF bias reset
-            int32_t oldZero = keyaZeroTicks;
-            keyaZeroTicks   = meanTicks;
-            azCorrAccum     = 0.0f;
-            ekfResetBias();          // EKF: absorb zero jump into b_enc
-            float deltaDeg  = (float)(keyaZeroTicks - oldZero) / keyaTicksPerDeg;
-            Serial.print("[AZ-RAPIDE] Saut direct: ");
-            Serial.print(deltaDeg, 2); Serial.print("deg");
-            Serial.print(" zero: "); Serial.print(oldZero);
-            Serial.print(" -> ");    Serial.println(keyaZeroTicks);
+            int32_t oldZero  = keyaZeroTicks;
+            float   driftDeg = (fabsf(keyaTicksPerDeg) > 0.001f)
+                               ? (float)abs((int64_t)meanTicks - (int64_t)oldZero) / keyaTicksPerDeg
+                               : 0.0f;
+            if (driftDeg > 5.0f) {
+              // Reject: CPD wizard calibration would be corrupted by a >5° jump
+              Serial.print("[AZ-RAPIDE] REJETE: derive="); Serial.print(driftDeg, 1);
+              Serial.println("deg > 5deg seuil");
+            } else {
+              keyaZeroTicks = meanTicks;
+              azCorrAccum   = 0.0f;
+              ekfResetBias();          // EKF: absorb zero jump into b_enc
+              float deltaDeg = (float)(keyaZeroTicks - oldZero) / keyaTicksPerDeg;
+              Serial.print("[AZ-RAPIDE] Saut direct: ");
+              Serial.print(deltaDeg, 2); Serial.print("deg");
+              Serial.print(" zero: "); Serial.print(oldZero);
+              Serial.print(" -> ");    Serial.println(keyaZeroTicks);
+            }
           }
           else
           {

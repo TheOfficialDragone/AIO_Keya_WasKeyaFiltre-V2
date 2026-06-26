@@ -2,7 +2,7 @@
 const char *asciiHex = "0123456789ABCDEF";
 
 // the new PANDA sentence buffer
-char nmea[100];
+char nmea[200];
 
 // GGA
 char fixTime[12];
@@ -24,7 +24,8 @@ char speedKnots[10] = {};
 // Alpha fixe : 0.1 (lissage modere, ajustable ici si besoin)
 float emaGpsHdg = 0.0f;
 static bool emaGpsInit = false;
-static const float EMA_GPS_ALPHA = 0.1f;
+static const float EMA_GPS_ALPHA = 0.3f;  // faster convergence after U-turns (~400ms vs 1.25s)
+uint32_t lastVtgMs = 0;   // timestamp of last valid VTG packet — used by AZ GPS dropout guard
 
 // RMC (Recommended Minimum specific GNSS data) - AJOUTS FlorianT
 char rmcDate[7] = {};   // Date DDMMYY + \0
@@ -574,6 +575,7 @@ void VTG_Handler()
         if (emaGpsHdg >= 3600.0f)
             emaGpsHdg -= 3600.0f;
     }
+    lastVtgMs = millis();
 }
 
 void RMC_Handler() // Ajout FlorianT NMEAOUT

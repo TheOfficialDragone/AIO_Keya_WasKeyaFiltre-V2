@@ -16,7 +16,6 @@ Architecture mirrors commercial systems (John Deere StarFire, Fendt, Trimble) th
 | Steering motor | Keya BLDC (CAN bus, heartbeat ID `0x07000001`) |
 | IMU | BNO085 (yaw rate + heading) |
 | GNSS | Single RTK antenna (speed + heading) |
-| Base PCB | [buched/Ecu_box_v2.01_autosteer4.1_ecu](https://github.com/buched/Ecu_box_v2.01_autosteer4.1_ecu) |
 
 **No physical axle WAS. Danfoss mode must be enabled in AgOpenGPS to activate the Keya encoder path.**
 

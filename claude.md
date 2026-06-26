@@ -57,12 +57,12 @@ The single source of truth for this entire codebase is the file **`repomix-outpu
 Field tests show algorithmic issues in the Virtual WAS logic (independent of GPS/BNO). Keep these systemic errors in mind for any math modifications:
 
 ### 1. Center & Zero Drift
-* **False Center:** The system occasionally misinterprets an angle of ~15° as straight ahead, incorrectly resetting the zero reference point.
-* **Residual Error:** During straight-line driving, a constant offset (e.g., 7° to 9°) often remains uncorrected without triggering an automatic re-zeroing.
+* **False Center:** The system occasionally misinterprets an angle of ~15° as straight ahead, incorrectly resetting the zero reference point. FIXED
+* **Residual Error:** During straight-line driving, a constant offset (e.g., 7° to 9°) often remains uncorrected without triggering an automatic re-zeroing. FIXED
 
 ### 2. Lag & Tracking Issues
-* **Slow Realignment:** The system takes too long to find the guidance line and return to zero after sharp maneuvers (e.g., U-turns).
-* **Disorientation:** The encoder math tends to accumulate error or lose track during continuous curves.
+* **Slow Realignment:** The system takes too long to find the guidance line and return to zero after sharp maneuvers (e.g., U-turns). FIXED
+* **Disorientation:** The encoder math tends to accumulate error or lose track during continuous curves. FIXED
 
 ---
 

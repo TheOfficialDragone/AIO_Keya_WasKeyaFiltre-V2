@@ -144,24 +144,6 @@ All values saved to EEPROM immediately on entry.
 
 Academic validation: Ma et al. (IEEE 2019) — field SD 0.91° straight, 2.56° curves using the same bicycle-model inverse.
 
----
-
-## PCB
-
-<img width="3060" height="4080" alt="20260428_105213" src="https://github.com/user-attachments/assets/034539bc-0827-4e93-bcbd-d16263b01353" />
-<img width="3456" height="4608" alt="20260223_144233" src="https://github.com/user-attachments/assets/6e946b45-2e5e-4752-becd-a2a39db2c7ec" />
-
----
-
-## Section control expansion board
-
-Modbus RTU NPN/PNP — 4 to 16 relays + digital I/O, DC 12V/24V:  
-[AliExpress link](https://a.aliexpress.com/_ExNAeaw)
-
-<img width="1079" height="463" alt="1000005454" src="https://github.com/user-attachments/assets/2ad86f5f-3ffe-409f-af55-76c547381ec2" />
-
----
-
 ## Credits
 
 Based on [lansalot/AIO_Keya_WasKeyaFiltre](https://github.com/lansalot/AIO_Keya_WasKeyaFiltre) (upstream stable base).  

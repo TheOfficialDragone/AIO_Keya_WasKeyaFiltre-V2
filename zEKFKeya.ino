@@ -199,6 +199,9 @@ static void ekfUpdateEncoder()
   float K[3];
   for (int i = 0; i < 3; i++)
     K[i] = (ekf_P[i][0] + ekf_P[i][2]) / S;
+  // At standstill kinematic update is unavailable: bias unobservable via encoder alone.
+  // Zero K[2] so encoder innovations don't corrupt bias when no speed reference exists.
+  if (gpsSpeed < 0.5f && fabsf(ekfYawRate) < 0.5f) K[2] = 0.0f;
 
   // State update
   for (int i = 0; i < 3; i++) ekf_x[i] += K[i] * innov;

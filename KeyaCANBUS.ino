@@ -222,8 +222,8 @@ void KeyaBus_Receive()
             // --- Encodeur cumulatif (bytes 0-1, high byte first selon manuel) ---
             uint16_t encTick = ((uint16_t)KeyaBusReceiveData.buf[0] << 8)
                                | (uint16_t)KeyaBusReceiveData.buf[1];
+            keyaLastHeartbeatMs = millis();  // set before encoder update: keyaEncInitDone=true never sees stale timestamp
             keyaUpdateEncoder(encTick);
-            keyaLastHeartbeatMs = millis();  // watchdog timestamp
 
             // --- Courant moteur (bytes 4-5, inchangé) ---
             if (KeyaBusReceiveData.buf[4] == 0xFF)

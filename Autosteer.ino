@@ -366,11 +366,16 @@ void autosteerLoop()
     }
 
     // Keya CAN heartbeat watchdog: if no heartbeat for >300ms, disable steering
-    if (steerConfig.IsDanfoss && keyaEncInitDone &&
-        (millis() - keyaLastHeartbeatMs) > 300) {
-      watchdogTimer = WATCHDOG_FORCE_VALUE;
-      disableKeyaSteer();
-      Serial.println("[SAFETY] Keya heartbeat lost - sterzo disabilitato");
+    {
+      static bool keyaHbLost = false;
+      bool hbLost = steerConfig.IsDanfoss && keyaEncInitDone &&
+                    (millis() - keyaLastHeartbeatMs) > 300;
+      if (hbLost) watchdogTimer = WATCHDOG_FORCE_VALUE;
+      if (hbLost && !keyaHbLost) {          // one-shot: only on transition
+        disableKeyaSteer();
+        Serial.println("[SAFETY] Keya heartbeat lost - sterzo disabilitato");
+      }
+      keyaHbLost = hbLost;
     }
 
 		//read all the switches

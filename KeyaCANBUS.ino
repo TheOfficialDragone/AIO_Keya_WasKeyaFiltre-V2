@@ -115,7 +115,7 @@ void enableKeyaSteer() {
 }
 
 void SteerKeya(int steerSpeed) {
-  int actualSpeed = map(steerSpeed, -255, 255, -995, 998);
+  int actualSpeed = map(steerSpeed, -255, 255, -1000, 1000);
   if (pwmDrive == 0) {
     disableKeyaSteer();
   }
@@ -160,6 +160,7 @@ void SteerKeya(int steerSpeed) {
 int32_t  keyaEncoderRaw    = 0;
 uint16_t keyaEncPrev       = 0;
 bool     keyaEncInitDone   = false;
+uint32_t keyaLastHeartbeatMs = 0;  // watchdog: timestamp of last 0x07000001 heartbeat
 
 void keyaUpdateEncoder(uint16_t rawTick)
 {
@@ -196,7 +197,7 @@ void keyaUpdateEncoder(uint16_t rawTick)
       kRevAccum += delta;
       if (-kRevAccum >= (int32_t)KEYA_DIR_DEADBAND) {
         keyaEncoderRaw = kFreeze + kRevAccum; kRevAccum = 0; kState = 3;
-      } else if (delta > 0) { keyaEncoderRaw = kFreeze + delta; kRevAccum = 0; kState = 1; }
+      } else if (delta > 0) { keyaEncoderRaw = kFreeze; kRevAccum = 0; kState = 1; }
       break;
     case 3:  // moving left
       if (newDir == 1) { kFreeze = keyaEncoderRaw; kRevAccum = delta; kState = 4; }
@@ -206,7 +207,7 @@ void keyaUpdateEncoder(uint16_t rawTick)
       kRevAccum += delta;
       if (kRevAccum >= (int32_t)KEYA_DIR_DEADBAND) {
         keyaEncoderRaw = kFreeze + kRevAccum; kRevAccum = 0; kState = 1;
-      } else if (delta < 0) { keyaEncoderRaw = kFreeze + delta; kRevAccum = 0; kState = 3; }
+      } else if (delta < 0) { keyaEncoderRaw = kFreeze; kRevAccum = 0; kState = 3; }
       break;
   }
 }
@@ -222,6 +223,7 @@ void KeyaBus_Receive()
             uint16_t encTick = ((uint16_t)KeyaBusReceiveData.buf[0] << 8)
                                | (uint16_t)KeyaBusReceiveData.buf[1];
             keyaUpdateEncoder(encTick);
+            keyaLastHeartbeatMs = millis();  // watchdog timestamp
 
             // --- Courant moteur (bytes 4-5, inchangé) ---
             if (KeyaBusReceiveData.buf[4] == 0xFF)

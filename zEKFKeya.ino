@@ -166,10 +166,11 @@ void ekfPredict()
     ekf_P[i][1] = FP[i][1];
     ekf_P[i][2] = FP[i][2];
   }
-  // Add Q
+  // Add Q — freeze bias growth when stationary (no kinematic update to separate bias from angle)
+  float q2_eff = (gpsSpeed < 0.5f && fabsf(ekfYawRate) < 0.5f) ? 0.0f : EKF_Q2;
   ekf_P[0][0] += EKF_Q0;
   ekf_P[1][1] += EKF_Q1;
-  ekf_P[2][2] += EKF_Q2;
+  ekf_P[2][2] += q2_eff;
 }
 
 // ----------------------------------------------------------------

@@ -86,9 +86,10 @@ static uint8_t azMenuStep    = 0;  // 0=attente choix, 1=attente valeur
 static uint8_t azMenuChoice  = 0;
 
 // Lock-to-lock CPD calibration wizard state (AGCO US8583312 pattern)
-static bool    calWizActive = false;
-static uint8_t calWizStep   = 0;
-static int32_t calLeftTicks = 0;
+static bool    calWizActive   = false;
+static uint8_t calWizStep     = 0;
+static int32_t calLeftTicks   = 0;
+static float   calPhysicalDeg = 0.0f;  // total lock-to-lock degrees entered by user
 
 bool azMenuLoop()
 {
@@ -99,26 +100,42 @@ bool azMenuLoop()
     String calInput = Serial.readStringUntil('\n');
     calInput.trim();
     if (calWizStep == 1) {
-      calLeftTicks = keyaEncoderRaw;
-      calWizStep   = 2;
-      Serial.print("[CAL] LEFT  recorded: "); Serial.println(calLeftTicks);
-      Serial.println("[CAL] Now steer FULL RIGHT to mechanical stop, then press Enter.");
+      // Step 1: user enters total physical lock-to-lock angle
+      float deg = calInput.toFloat();
+      if (deg >= 30.0f && deg <= 180.0f) {
+        calPhysicalDeg = deg;
+        calWizStep     = 2;
+        Serial.print("[CAL] Angolo fisico totale: "); Serial.print(deg, 1); Serial.println(" deg");
+        Serial.println("[CAL] Porta sterzo a FINE CORSA SINISTRA (meccanico), poi Invio.");
+      } else {
+        Serial.println("[CAL] Valore non valido. Inserire angolo totale lock-to-lock in gradi (30-180):");
+      }
     } else if (calWizStep == 2) {
+      calLeftTicks = keyaEncoderRaw;
+      calWizStep   = 3;
+      Serial.print("[CAL] SINISTRA registrata: "); Serial.println(calLeftTicks);
+      Serial.println("[CAL] Porta sterzo a FINE CORSA DESTRA (meccanico), poi Invio.");
+    } else if (calWizStep == 3) {
       int32_t calRightTicks = keyaEncoderRaw;
-      Serial.print("[CAL] RIGHT recorded: "); Serial.println(calRightTicks);
+      Serial.print("[CAL] DESTRA registrata: "); Serial.println(calRightTicks);
       int32_t newZero    = (calLeftTicks + calRightTicks) / 2;
       float   totalTicks = fabsf((float)(calRightTicks - calLeftTicks));
-      float   newCPD     = totalTicks / (2.0f * ekfMaxAngleDeg);
+      // calPhysicalDeg = total lock-to-lock degrees measured physically by user
+      // → not ekfMaxAngleDeg (which is an EKF clamp param, not a physical reference)
+      float   newCPD     = totalTicks / calPhysicalDeg;
       // Apply
       keyaZeroTicks   = newZero;
       keyaTicksPerDeg = newCPD;
+      ekfMaxAngleDeg  = calPhysicalDeg / 2.0f;  // derive half-range from measured physical angle
       // Persist
       EEPROM.put(EEPROM_ADDR_KEYA_TICKS, keyaTicksPerDeg);
       EEPROM.put(EEPROM_ADDR_KEYA_ZERO,  keyaZeroTicks);
+      ekfSaveParams();
       ekfFullReset();
-      Serial.print("[CAL] New center (zeroTicks): "); Serial.println(newZero);
-      Serial.print("[CAL] New ticksPerDeg: ");        Serial.println(newCPD, 2);
-      Serial.println("[CAL] EKF reset. Drive straight to verify.");
+      Serial.print("[CAL] Centro (zeroTicks): ");  Serial.println(newZero);
+      Serial.print("[CAL] ticksPerDeg: ");          Serial.println(newCPD, 2);
+      Serial.print("[CAL] ekfMaxAngleDeg: ");       Serial.println(ekfMaxAngleDeg, 1);
+      Serial.println("[CAL] EKF reset. Guida dritto per verificare.");
       calWizActive = false;
       calWizStep   = 0;
     }
@@ -136,9 +153,12 @@ bool azMenuLoop()
 
         // Lancement assistant calibration butee-a-butee (CPD)
         if (input == "c" || input == "C") {
-            calWizActive = true;
-            calWizStep   = 1;
-            Serial.println("[CAL] Lock-to-lock wizard. Steer FULL LEFT to mechanical stop, then press Enter.");
+            calWizActive   = true;
+            calWizStep     = 1;
+            calPhysicalDeg = 0.0f;
+            Serial.println("[CAL] Wizard calibrazione butee-a-butee.");
+            Serial.println("[CAL] Inserire angolo TOTALE lock-to-lock del trattore in gradi");
+            Serial.println("[CAL] (es: 70 per un trattore con +-35deg di sterzo), poi Invio:");
             return false;
         }
 

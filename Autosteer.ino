@@ -662,7 +662,7 @@ void autosteerLoop()
             if (encRangeDeg > 2.0f) {
               Serial.print("[AZ] PREMIER ZERO REJETE: ruote in movimento (range=");
               Serial.print(encRangeDeg, 1); Serial.println("deg > 2deg)");
-              azAccum = 0; azCount = 0; stableStart = 0;
+              azAccum = 0; azCount = 0; stableStart = 0; azCooldown = nowMs;
             } else {
               keyaZeroTicks = meanTicks;
               wasZeroDone   = true;

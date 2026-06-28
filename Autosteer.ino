@@ -145,7 +145,9 @@ uint8_t KBUSRearHitch = 250;    //Variable for hitch height from KBUS (0-250 *0.
 uint8_t countHyd = 0; // Compteur pour le temps d'appui bouton Fendt
 
 uint32_t myTime;
-extern uint32_t lastVtgMs;  // defined in zHandlers.ino — used for GPS dropout detection in AZ
+extern uint32_t lastVtgMs;       // defined in zHandlers.ino — used for GPS dropout detection in AZ
+extern uint8_t  gpsFixQualityInt; // F9P fix quality: 4=RTK fixed, 5=RTK float, 1=GPS bare
+extern uint32_t keyaLastHeartbeatMs; // defined in KeyaCANBUS.ino
 uint32_t lastpush;
 uint32_t Time;
 uint32_t relayTime;
@@ -363,6 +365,14 @@ void autosteerLoop()
       //digitalWrite(PWM2_RPWM, LOW);
     }
 
+    // Keya CAN heartbeat watchdog: if no heartbeat for >300ms, disable steering
+    if (steerConfig.IsDanfoss && keyaEncInitDone &&
+        (millis() - keyaLastHeartbeatMs) > 300) {
+      watchdogTimer = WATCHDOG_FORCE_VALUE;
+      disableKeyaSteer();
+      Serial.println("[SAFETY] Keya heartbeat lost - sterzo disabilitato");
+    }
+
 		//read all the switches
 		workSwitch = digitalRead(WORKSW_PIN);  // read work switch
     if (workCAN == 1) workSwitch = 0;         // If CAN workswitch is on, set workSwitch ON
@@ -523,6 +533,8 @@ void autosteerLoop()
       static uint32_t dbgLastPrint = 0;
       static uint32_t azCooldown   = 0;
       static float    azLastGpsHdg = 0.0f;
+      static int32_t  azEncMin     = 0;    // encoder range guard during stable window
+      static int32_t  azEncMax     = 0;
       bool& azYawInit = azYawInitF;   // file-scope — reset by autosteerSetup on soft-reboot
       bool& azGpsInit = azGpsInitF;
 
@@ -594,7 +606,9 @@ void autosteerLoop()
       bool speedOk    = (gpsSpeed > azParams.speedMin);
       bool straightOk = (!azParams.useBno) || (yawRate < yawRateMax);
       bool gpsFresh   = (!azParams.useGps) || ((nowMs - lastVtgMs) < 3000);
-      bool gpsCapOk   = (!azParams.useGps) || (gpsOk && gpsFresh);
+      // F9P quality gate: require at least DGPS (2) for AZ; RTK float/fixed preferred
+      bool gpsQualOk  = (!azParams.useGps) || (gpsFixQualityInt >= 2);
+      bool gpsCapOk   = (!azParams.useGps) || (gpsOk && gpsFresh && gpsQualOk);
       bool cooldownOk = (nowMs - azCooldown > 2000);
 
       // --- DEBUG toutes les 5s si periode stable en cours ---
@@ -622,6 +636,8 @@ void autosteerLoop()
           stableStart = nowMs;
           azAccum     = 0;
           azCount     = 0;
+          azEncMin    = keyaEncoderRaw;
+          azEncMax    = keyaEncoderRaw;
           Serial.print(guidanceActive ? "[AZ-PRECIS] " : "[AZ-RAPIDE] ");
           Serial.print("Debut periode stable (adapt=");
           Serial.print(adaptFactor, 2); Serial.println(")...");
@@ -629,6 +645,8 @@ void autosteerLoop()
 
         azAccum += (int64_t)keyaEncoderRaw;
         azCount++;
+        if (keyaEncoderRaw < azEncMin) azEncMin = keyaEncoderRaw;
+        if (keyaEncoderRaw > azEncMax) azEncMax = keyaEncoderRaw;
 
         if ((nowMs - stableStart) > azTimeMs && azCount > 0)
         {
@@ -636,14 +654,25 @@ void autosteerLoop()
 
           if (!wasZeroDone)
           {
-            keyaZeroTicks = meanTicks;
-            wasZeroDone   = true;
-            azCorrAccum   = 0.0f;
-            ekfFullReset();          // EKF: fresh start after first zero
-            Serial.print(guidanceActive ? "[AZ-PRECIS] " : "[AZ-RAPIDE] ");
-            Serial.print("*** PREMIER ZERO ETABLI *** (");
-            Serial.print(azCount); Serial.print(" ech) zeroTicks=");
-            Serial.println(keyaZeroTicks);
+            // Guard: reject first zero if encoder moved >2° during the stable window
+            // (wheels were turning — encoder range check is the only angle reference available)
+            int32_t encRange = azEncMax - azEncMin;
+            float   encRangeDeg = (fabsf(keyaTicksPerDeg) > 0.001f)
+                                  ? (float)encRange / keyaTicksPerDeg : 999.0f;
+            if (encRangeDeg > 2.0f) {
+              Serial.print("[AZ] PREMIER ZERO REJETE: ruote in movimento (range=");
+              Serial.print(encRangeDeg, 1); Serial.println("deg > 2deg)");
+              azAccum = 0; azCount = 0; stableStart = 0; azCooldown = nowMs;
+            } else {
+              keyaZeroTicks = meanTicks;
+              wasZeroDone   = true;
+              azCorrAccum   = 0.0f;
+              ekfFullReset();          // EKF: fresh start after first zero
+              Serial.print(guidanceActive ? "[AZ-PRECIS] " : "[AZ-RAPIDE] ");
+              Serial.print("*** PREMIER ZERO ETABLI *** (");
+              Serial.print(azCount); Serial.print(" ech) zeroTicks=");
+              Serial.println(keyaZeroTicks);
+            }
           }
           else if (!guidanceActive)
           {
@@ -905,10 +934,10 @@ void ReceiveUdp()
 				//store in EEPROM (update skips write if value unchanged — protects Flash endurance)
 				EEPROM.put(10, steerSettings);
 
-        // En mode Keya : si AOG envoie wasOffset = 0 -> reset zero encodeur
-        if (steerConfig.IsDanfoss && steerSettings.wasOffset == 0) {
+        // En mode Keya : si AOG envoie wasOffset = 0 ET qu'un zero valide existe deja -> re-zero
+        // Guard: wasZeroDone doit etre true pour eviter false zero sur EEPROM vierge au demarrage
+        if (steerConfig.IsDanfoss && steerSettings.wasOffset == 0 && wasZeroDone) {
           keyaZeroTicks = keyaEncoderRaw;
-          wasZeroDone   = true;
           stableStart   = 0;
           azCorrAccum   = 0.0f;
           ekfFullReset();              // EKF: fresh start from AOG-forced zero

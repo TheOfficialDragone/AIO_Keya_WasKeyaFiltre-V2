@@ -20,6 +20,9 @@ char ageDGPS[10];
 char vtgHeading[12] = {};
 char speedKnots[10] = {};
 
+// F9P fix quality exposed for AZ gating (0=invalid 1=GPS 2=DGPS 4=RTK fixed 5=RTK float)
+uint8_t gpsFixQualityInt = 0;
+
 // Cap GPS filtre EMA (x10 deg, meme echelle que yaw BNO) - utilise par auto-zero WAS
 // Alpha fixe : 0.1 (lissage modere, ajustable ici si besoin)
 float emaGpsHdg = 0.0f;
@@ -80,6 +83,7 @@ void GGA_Handler() // Rec'd GGA
 
     // fix quality
     parser.getArg(5, fixQuality);
+    gpsFixQualityInt = (uint8_t)atoi(fixQuality);
 
     // satellite #
     parser.getArg(6, numSats);
